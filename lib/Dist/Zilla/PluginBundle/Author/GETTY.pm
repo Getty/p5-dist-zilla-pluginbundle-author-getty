@@ -35,6 +35,13 @@ This is the plugin bundle that GETTY uses.  It is equivalent to:
   tag_format = %v
   push_to = origin
 
+  [ChangelogFromGit]
+  max_age = 99999
+  tag_regexp = ^v(.+)$
+  file_name = Changes
+  wrap_column = 74
+  debug = 0
+
 If the C<task> argument is given to the bundle, PodWeaver is replaced with
 TaskWeaver and Git::NextVersion is replaced with AutoVersion.  If the
 C<manual_version> argument is given, AutoVersion is omitted. 
