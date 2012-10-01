@@ -30,6 +30,9 @@ This is the plugin bundle that GETTY uses.  It is equivalent to:
   config_plugin = @GETTY
 
   [Repository]
+  
+  [Git::CheckFor::CorrectBranch]
+  release_branch = master
 
   [@Git]
   tag_format = %v
@@ -128,6 +131,12 @@ sub configure {
 			do_metadata => 1,
 		}
 	]);
+
+  $self->add_plugins([
+    'Git::CheckFor::CorrectBranch' => {
+      release_branch => 'master',
+    },
+  ]);
 
   $self->add_plugins(
     [ Prereqs => 'TestMoreWithSubtests' => {
