@@ -3,7 +3,7 @@ package Dist::Zilla::PluginBundle::Author::GETTY;
 
 use Moose;
 use Moose::Autobox;
-use Dist::Zilla 2.100922; # TestRelease
+use Dist::Zilla;
 with 'Dist::Zilla::Role::PluginBundle::Easy';
 
 =head1 DESCRIPTION
@@ -45,9 +45,24 @@ This is the plugin bundle that GETTY uses.  It is equivalent to:
   wrap_column = 74
   debug = 0
 
+You can configure it (given values are default):
+
+  [@Author::GETTY]
+  author = GETTY
+  release_branch = master
+  weaver_config = @Author::GETTY
+
 If the C<task> argument is given to the bundle, PodWeaver is replaced with
-TaskWeaver and Git::NextVersion is replaced with AutoVersion.  If the
-C<manual_version> argument is given, AutoVersion is omitted. 
+TaskWeaver and Git::NextVersion is replaced with AutoVersion:
+
+  [@Author::GETTY]
+  task = 1
+
+If the C<manual_version> argument is given, AutoVersion and Git::NextVersion
+are omitted.
+
+  [@Author::GETTY]
+  manual_version = 1.222333
 
 =cut
 
@@ -66,6 +81,20 @@ has major_version => (
   isa     => 'Int',
   lazy    => 1,
   default => sub { $_[0]->payload->{version} || 0 },
+);
+
+has author => (
+  is      => 'ro',
+  isa     => 'Str',
+  lazy    => 1,
+  default => sub { 'GETTY' },
+);
+
+has release_branch => (
+  is      => 'ro',
+  isa     => 'Str',
+  lazy    => 1,
+  default => sub { 'master' },
 );
 
 has is_task => (
@@ -127,14 +156,14 @@ sub configure {
 
 	$self->add_plugins([
 		'Authority' => {
-			authority => 'cpan:GETTY',
+			authority => 'cpan:'.$self->author,
 			do_metadata => 1,
 		}
 	]);
 
   $self->add_plugins([
     'Git::CheckFor::CorrectBranch' => {
-      release_branch => 'master',
+      release_branch => $self->release_branch,
     },
   ]);
 
