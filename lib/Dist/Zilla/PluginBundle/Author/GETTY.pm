@@ -27,7 +27,7 @@ This is the plugin bundle that GETTY uses.  It is equivalent to:
   do_metadata = 1
 
   [PodWeaver]
-  config_plugin = @GETTY
+  config_plugin = @Author::GETTY
 
   [Repository]
   
