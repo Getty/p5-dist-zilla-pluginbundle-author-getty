@@ -167,10 +167,9 @@ sub configure {
     if $self->no_cpan and $self->author ne 'GETTY';
 
   if ($self->no_cpan) {
-    $self->add_bundle('@Filter' => {
+    $self->add_bundle('Filter' => {
       -bundle => '@Basic',
-      -remove => 'ShareDir',
-      -remove => 'UploadToCPAN',
+      -remove => ['UploadToCPAN'],
     });
   } else {
     $self->add_bundle('@Basic');
@@ -214,7 +213,7 @@ sub configure {
     if ($self->$func) {
       my $plugin = join('',map { ucfirst($_) } split(/_/,$_));
       $self->add_plugins([
-        $plugin => {
+        'Run::'.$plugin => {
           run => $self->$func,
         }
       ]);
