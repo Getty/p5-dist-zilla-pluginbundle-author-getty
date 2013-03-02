@@ -8,7 +8,7 @@ with 'Dist::Zilla::Role::PluginBundle::Easy';
 
 =head1 SYNOPSIS
 
-  name    = Alien-ffmpeg
+  name    = Your-App
   author  = You User <you@universe.org>
   license = Perl_5
   copyright_holder = You User
