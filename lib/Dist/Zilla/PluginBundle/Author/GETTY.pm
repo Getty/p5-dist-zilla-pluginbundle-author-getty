@@ -80,6 +80,8 @@ You can also use shortcuts for integrating L<Dist::Zilla::Plugin::Run>:
   run_release = deployer.pl --dir %d --tgz %a --name %n --version %v
   run_after_release = script/myapp_after.pl --archive %s --version %s
   run_test = script/tester.pl --name %n --version %v some_file.ext
+  run_if_release_test = ./Build install
+  run_if_release_test = make install
 
 =cut
 
@@ -153,7 +155,7 @@ has no_makemaker => (
   is      => 'ro',
   isa     => 'Bool',
   lazy    => 1,
-  default => sub { $_[0]->payload->{no_makemaker} },
+  default => sub { $_[0]->payload->{no_makemaker} || $_[0]->is_alien },
 );
 
 has is_task => (
@@ -161,6 +163,13 @@ has is_task => (
   isa     => 'Bool',
   lazy    => 1,
   default => sub { $_[0]->payload->{task} },
+);
+
+has is_alien => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub { $_[0]->alien_repo ? 1 : 0 },
 );
 
 has weaver_config => (
@@ -171,13 +180,20 @@ has weaver_config => (
 );
 
 my @run_options = qw( after_build before_build before_release release after_release test );
+my @run_ways = qw( run run_if_trial run_no_trial run_if_release run_no_release );
 
-for (@run_options) {
-  has "run_".$_ => (
+my @run_attributes = map { my $o = $_; map { join('_',$_,$o) } @run_ways } @run_options;
+
+my @alien_options = qw( repo name bins pattern_prefix pattern_suffix pattern_version pattern );
+
+my @alien_attributes = map { 'alien_'.$_ } @alien_options;
+
+for my $attr (@run_attributes, @alien_attributes) {
+  has $attr => (
     is      => 'ro',
     isa     => 'Str',
     lazy    => 1,
-    default => sub { $_[0]->payload->{"run_".$_} || "" },
+    default => sub { $_[0]->payload->{$attr} || "" },
   );
 }
 
@@ -259,11 +275,30 @@ sub configure {
 		GithubMeta
 	));
 
-  unless ($self->no_installrelease) {
+  if ($self->is_alien) {
+    my %alien_values;
+    for (@alien_options) {
+      my $func = 'alien_'.$_;
+      $alien_values{$_} = $self->$func if $self->$func;
+    }
+    $self->add_plugins([
+      'Alien' => \%alien_values,
+    ]);
+  }
+
+  unless ($self->no_installrelease || $self->is_alien) {
     $self->add_plugins([
       'InstallRelease' => {
         install_command => $self->installrelease_command,
       }
+    ]);
+  }
+
+  unless (!$self->is_alien || $self->no_installrelease) {
+    $self->add_plugins([
+      'Run::Test' => 'AlienInstallTestHack' => {
+        run_if_release => ['./Build install'],
+      },
     ]);
   }
 
@@ -285,7 +320,7 @@ sub configure {
   $self->add_plugins(
     [ Prereqs => 'TestsOfAuthorGETTY' => {
       -phase => 'test',
-      -type  => 'requires',
+      -type => 'requires',
       'Test::More' => '0.96',
       'Test::LoadAllModules' => '0.021',
     } ],
