@@ -283,10 +283,11 @@ sub configure {
   ]);
 
   $self->add_plugins(
-    [ Prereqs => 'TestMoreWithSubtests' => {
+    [ Prereqs => 'TestsOfAuthorGETTY' => {
       -phase => 'test',
       -type  => 'requires',
-      'Test::More' => '0.96'
+      'Test::More' => '0.96',
+      'Test::LoadAllModules' => '0.021',
     } ],
   );
 
