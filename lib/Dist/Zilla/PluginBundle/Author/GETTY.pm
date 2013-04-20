@@ -27,6 +27,7 @@ are default):
   release_branch = master
   weaver_config = @Author::GETTY
   no_cpan = 0
+  no_travis = 0
   duckpan = 0
   no_install = 0
   no_makemaker = 0
@@ -44,6 +45,8 @@ In default configuration it is equivalent to:
   [NextRelease]
   [PodSyntaxTests]
   [GithubMeta]
+  [TravisYML]
+
   [InstallRelease]
   install_command = cpanm .
 
@@ -130,6 +133,11 @@ L<Dist::Zilla::Plugin::PodWeaver>.
 If set to 1, this attribute will disable L<Dist::Zilla::Plugin::UploadToCPAN>.
 By default a dzil release would release to L<CPAN|http://www.cpan.org/>.
 
+=head2 no_travis
+
+If set to 1, this attribute will disable L<Dist::Zilla::TravisCI>. By default a
+dzil build or release would also generate a B<.travis.yml>.
+
 =head2 duckpan
 
 If set to 1, this attribute will activate L<Dist::Zilla::Plugin::UploadToDuckPAN>.
@@ -145,6 +153,9 @@ If set to 1, the resulting distribution can't be installed.
 
 =head2 no_makemaker
 
+If set to 1, the resulting distribution will not use L<Dist::Zilla::Plugin::MakeMaker>.
+This is an internal function, and you should know what you do, if you activate
+this flag.
 
 =head2 no_installrelease
 
@@ -191,6 +202,8 @@ L<Dist::Zilla::Plugin::Run>
 L<Dist::Zilla::Plugin::TaskWeaver>
 
 L<Dist::Zilla::Plugin::UploadToDuckPAN>
+
+L<Dist::Zilla::TravisCI>
 
 =cut
 
@@ -251,6 +264,13 @@ has no_cpan => (
   isa     => 'Bool',
   lazy    => 1,
   default => sub { $_[0]->payload->{no_cpan} },
+);
+
+has no_travis => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{no_travis} },
 );
 
 has no_install => (
@@ -383,6 +403,12 @@ sub configure {
 		Repository
 		GithubMeta
 	));
+
+  unless ($self->no_travis) {
+    $self->add_plugins(qw(
+      TravisYML
+    ));
+  }
 
   if ($self->is_alien) {
     my %alien_values;
