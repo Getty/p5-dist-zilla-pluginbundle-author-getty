@@ -138,6 +138,11 @@ By default a dzil release would release to L<CPAN|http://www.cpan.org/>.
 If set to 1, this attribute will disable L<Dist::Zilla::TravisCI>. By default a
 dzil build or release would also generate a B<.travis.yml>.
 
+=head2 no_changelog_from_git
+
+If set to 1, then L<Dist::Zilla::Plugin::ChangelogFromGit> will be disabled, and
+L<Dist::Zilla::Plugin::NextRelease> will be used instead.
+
 =head2 duckpan
 
 If set to 1, this attribute will activate L<Dist::Zilla::Plugin::UploadToDuckPAN>.
@@ -271,6 +276,13 @@ has no_travis => (
   isa     => 'Bool',
   lazy    => 1,
   default => sub { $_[0]->payload->{no_travis} },
+);
+
+has no_changelog_from_git => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{no_changelog_from_git} },
 );
 
 has no_install => (
@@ -461,15 +473,21 @@ sub configure {
     } ],
   );
 
-  $self->add_plugins([
-    'ChangelogFromGit' => {
-      max_age => 99999,
-      tag_regexp => '^v(.+)$',
-      file_name => 'Changes',
-      wrap_column => 74,
-      debug => 0,
-    }
-  ]);
+  if ($self->no_changelog_from_git) {
+    $self->add_plugins(qw(
+      NextRelease
+    ));
+  } else {
+    $self->add_plugins([
+      'ChangelogFromGit' => {
+        max_age => 99999,
+        tag_regexp => '^v(.+)$',
+        file_name => 'Changes',
+        wrap_column => 74,
+        debug => 0,
+      }
+    ]);
+  }
 
   if ($self->is_task) {
     $self->add_plugins('TaskWeaver');
