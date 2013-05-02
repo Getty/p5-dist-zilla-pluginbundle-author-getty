@@ -45,7 +45,7 @@ In default configuration it is equivalent to:
   [NextRelease]
   [PodSyntaxTests]
   [GithubMeta]
-  [TravisYML]
+  [TravisCI]
 
   [InstallRelease]
   install_command = cpanm .
@@ -135,8 +135,8 @@ By default a dzil release would release to L<CPAN|http://www.cpan.org/>.
 
 =head2 no_travis
 
-If set to 1, this attribute will disable L<Dist::Zilla::TravisCI>. By default a
-dzil build or release would also generate a B<.travis.yml>.
+If set to 1, this attribute will disable L<Dist::Zilla::Plugin::TravisCI>. By
+default a dzil build or release would also generate a B<.travis.yml>.
 
 =head2 no_changelog_from_git
 
@@ -208,7 +208,7 @@ L<Dist::Zilla::Plugin::TaskWeaver>
 
 L<Dist::Zilla::Plugin::UploadToDuckPAN>
 
-L<Dist::Zilla::TravisCI>
+L<Dist::Zilla::Plugin::TravisCI>
 
 =cut
 
@@ -418,7 +418,7 @@ sub configure {
 
   unless ($self->no_travis) {
     $self->add_plugins(qw(
-      TravisYML
+      TravisCI
     ));
   }
 
