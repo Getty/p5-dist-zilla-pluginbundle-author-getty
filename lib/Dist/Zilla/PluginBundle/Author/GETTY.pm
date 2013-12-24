@@ -6,6 +6,8 @@ use Moose::Autobox;
 use Dist::Zilla;
 with 'Dist::Zilla::Role::PluginBundle::Easy';
 
+use Dist::Zilla::Plugin::TravisCI ();
+
 =head1 SYNOPSIS
 
   name    = Your-App
@@ -32,6 +34,9 @@ are default):
   no_install = 0
   no_makemaker = 0
   no_installrelease = 0
+  no_changes = 0
+  no_changelog_from_git = 0
+  no_podweaver = 0
   installrelease_command = cpanm .
 
 In default configuration it is equivalent to:
@@ -98,6 +103,12 @@ You can also use shortcuts for integrating L<Dist::Zilla::Plugin::Run>:
   run_if_release_test = ./Build install
   run_if_release_test = make install
 
+You can use all options of L<Dist::Zilla::Plugin::TravisCI> just by prefix
+them with B<travis_>, like here:
+
+  [@Author::GETTY]
+  travis_before_install = duckpan DDGC::Static
+
 It also combines on request with L<Dist::Zilla::Plugin::Alien>, you can set
 all parameter of the Alien plugin here, just by preceeding with I<alien_>, the
 only required parameter here is C<alien_repo>:
@@ -142,6 +153,15 @@ default a dzil build or release would also generate a B<.travis.yml>.
 
 If set to 1, then L<Dist::Zilla::Plugin::ChangelogFromGit> will be disabled, and
 L<Dist::Zilla::Plugin::NextRelease> will be used instead.
+
+=head2 no_changes
+
+If set to 1, then neither L<Dist::Zilla::Plugin::ChangelogFromGit> or
+L<Dist::Zilla::Plugin::NextRelease> will be used.
+
+=head2 no_podweaver
+
+If set to 1, then L<Dist::Zilla::Plugin::PodWeaver> is not used.
 
 =head2 duckpan
 
@@ -285,6 +305,13 @@ has no_changelog_from_git => (
   default => sub { $_[0]->payload->{no_changelog_from_git} },
 );
 
+has no_changes => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{no_changes} },
+);
+
 has no_install => (
   is      => 'ro',
   isa     => 'Bool',
@@ -297,6 +324,13 @@ has no_makemaker => (
   isa     => 'Bool',
   lazy    => 1,
   default => sub { $_[0]->payload->{no_makemaker} || $_[0]->is_alien },
+);
+
+has no_podweaver => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{no_podweaver} },
 );
 
 has is_task => (
@@ -325,11 +359,20 @@ my @run_ways = qw( run run_if_trial run_no_trial run_if_release run_no_release )
 
 my @run_attributes = map { my $o = $_; map { join('_',$_,$o) } @run_ways } @run_options;
 
+for my $attr (@run_attributes) {
+  has $attr => (
+    is      => 'ro',
+    isa     => 'ArrayRef[Str]',
+    lazy    => 1,
+    default => sub { [] },
+  );
+}
+
 my @alien_options = qw( repo name bins pattern_prefix pattern_suffix pattern_version pattern );
 
 my @alien_attributes = map { 'alien_'.$_ } @alien_options;
 
-for my $attr (@run_attributes, @alien_attributes) {
+for my $attr (@alien_attributes) {
   has $attr => (
     is      => 'ro',
     isa     => 'Str',
@@ -337,6 +380,41 @@ for my $attr (@run_attributes, @alien_attributes) {
     default => sub { $_[0]->payload->{$attr} || "" },
   );
 }
+
+my @travis_str_options = (
+  @Dist::Zilla::Plugin::TravisCI::bools,
+);
+
+my @travis_str_attributes = map { 'travis_'.$_ } @travis_str_options;
+
+for my $attr (@travis_str_attributes) {
+  has $attr => (
+    is      => 'ro',
+    isa     => 'Str',
+    lazy    => 1,
+    default => sub { $_[0]->payload->{$attr} || "" },
+  );
+}
+
+my @travis_array_options = (
+  @Dist::Zilla::Plugin::TravisCI::phases,
+  @Dist::Zilla::Plugin::TravisCI::emptymvarrayattr,
+  'irc_template',
+  'perl_version',
+);
+
+my @travis_array_attributes = map { 'travis_'.$_ } @travis_array_options;
+
+for my $attr (@travis_array_attributes) {
+  has $attr => (
+    is      => 'ro',
+    isa     => 'ArrayRef[Str]',
+    lazy    => 1,
+    default => sub { [] },
+  );
+}
+
+sub mvp_multivalue_args { @travis_array_attributes, @run_attributes }
 
 sub configure {
   my ($self) = @_;
@@ -397,7 +475,7 @@ sub configure {
   for (@run_options) {
     my $net = $_;
     my $func = 'run_'.$_;
-    if ($self->$func) {
+    if (@{$self->$func}) {
       my $plugin = join('',map { ucfirst($_) } split(/_/,$_));
       $self->add_plugins([
         'Run::'.$plugin => {
@@ -417,9 +495,18 @@ sub configure {
 	));
 
   unless ($self->no_travis) {
-    $self->add_plugins(qw(
-      TravisCI
-    ));
+    $self->add_plugins([
+      TravisCI => {
+        ( map {
+          my $func = 'travis_'.$_;
+          $self->$func ? ( $_ => $self->$func ) : ();
+        } @travis_str_options ),
+        ( map {
+          my $func = 'travis_'.$_;
+          scalar @{$self->$func} ? ( $_ => $self->$func ) : ();
+        } @travis_array_options ),
+      },
+    ]);
   }
 
   if ($self->is_alien) {
@@ -473,28 +560,32 @@ sub configure {
     } ],
   );
 
-  if ($self->no_changelog_from_git) {
-    $self->add_plugins(qw(
-      NextRelease
-    ));
-  } else {
-    $self->add_plugins([
-      'ChangelogFromGit' => {
-        max_age => 99999,
-        tag_regexp => '^v(.+)$',
-        file_name => 'Changes',
-        wrap_column => 74,
-        debug => 0,
-      }
-    ]);
+  unless ($self->no_changes) {
+    if ($self->no_changelog_from_git) {
+      $self->add_plugins(qw(
+        NextRelease
+      ));
+    } else {
+      $self->add_plugins([
+        'ChangelogFromGit' => {
+          max_age => 99999,
+          tag_regexp => '^v(.+)$',
+          file_name => 'Changes',
+          wrap_column => 74,
+          debug => 0,
+        }
+      ]);
+    }
   }
 
   if ($self->is_task) {
     $self->add_plugins('TaskWeaver');
   } else {
-    $self->add_plugins([
-      PodWeaver => { config_plugin => $self->weaver_config }
-    ]);
+    unless ($self->no_podweaver) {
+      $self->add_plugins([
+        PodWeaver => { config_plugin => $self->weaver_config }
+      ]);
+    }
   }
 
   $self->add_bundle('@Git' => {
