@@ -556,7 +556,6 @@ sub configure {
       -phase => 'test',
       -type => 'requires',
       'Test::More' => '0.96',
-      'Test::LoadAllModules' => '0.021',
     } ],
   );
 
