@@ -551,14 +551,7 @@ sub configure {
     },
   ]);
 
-  $self->add_plugins(
-    [ Prereqs => 'TestsOfAuthorGETTY' => {
-      -phase => 'test',
-      -type => 'requires',
-      'Test::More' => '0.96',
-      'Test::LoadAllModules' => '0.021',
-    } ],
-  );
+  $self->add_plugins('Prereqs::FromCPANfile');
 
   unless ($self->no_changes) {
     if ($self->no_changelog_from_git) {
