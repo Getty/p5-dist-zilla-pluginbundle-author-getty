@@ -1,7 +1,7 @@
 
 requires 'App::cpanminus', '1.6002';
 requires 'Dist::Zilla', '4.300030';
-requires 'Dist::Zilla::Plugin::Alien', '0.007';
+requires 'Dist::Zilla::Plugin::Alien', '0.011';
 requires 'Dist::Zilla::Plugin::Authority', '1.006';
 requires 'Dist::Zilla::Plugin::BumpVersionFromGit', '0.009';
 requires 'Dist::Zilla::PluginBundle::Git', '2.009';
