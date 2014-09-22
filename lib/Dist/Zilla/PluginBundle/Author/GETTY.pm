@@ -368,7 +368,7 @@ for my $attr (@run_attributes) {
   );
 }
 
-my @alien_options = qw( repo name bins pattern_prefix pattern_suffix pattern_version pattern );
+my @alien_options = qw( repo name bins pattern_prefix pattern_suffix pattern_version pattern autoconf_with_pic isolate_dynamic );
 
 my @alien_attributes = map { 'alien_'.$_ } @alien_options;
 
@@ -377,7 +377,7 @@ for my $attr (@alien_attributes) {
     is      => 'ro',
     isa     => 'Str',
     lazy    => 1,
-    default => sub { $_[0]->payload->{$attr} || "" },
+    default => sub { defined $_[0]->payload->{$attr} ? $_[0]->payload->{$attr} : "" },
   );
 }
 
@@ -513,7 +513,7 @@ sub configure {
     my %alien_values;
     for (@alien_options) {
       my $func = 'alien_'.$_;
-      $alien_values{$_} = $self->$func if $self->$func;
+      $alien_values{$_} = $self->$func if defined $self->$func && $self->$func ne '';
     }
     $self->add_plugins([
       'Alien' => \%alien_values,
