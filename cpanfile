@@ -15,7 +15,6 @@ requires 'Dist::Zilla::Plugin::Repository', '0.19';
 requires 'Dist::Zilla::Plugin::Prereqs::FromCPANfile', '0';
 requires 'Dist::Zilla::Plugin::Run', '0.018';
 requires 'Dist::Zilla::Plugin::TaskWeaver', '0.101624';
-requires 'Dist::Zilla::Plugin::UploadToDuckPAN', '0.002';
 requires 'Dist::Zilla::Plugin::TravisCI', '0';
 requires 'Pod::Elemental', '0.102362';
 requires 'Pod::Elemental::Transformer::List', '0.101620';
