@@ -357,7 +357,7 @@ for my $attr (@run_attributes) {
     is      => 'ro',
     isa     => 'ArrayRef[Str]',
     lazy    => 1,
-    default => sub { [] },
+    default => sub { defined $_[0]->payload->{$attr} ? $_[0]->payload->{$attr} : [] },
   );
 }
 
@@ -385,7 +385,7 @@ for my $attr (@travis_str_attributes) {
     is      => 'ro',
     isa     => 'Str',
     lazy    => 1,
-    default => sub { $_[0]->payload->{$attr} || "" },
+    default => sub { defined $_[0]->payload->{$attr} ? $_[0]->payload->{$attr} : "" },
   );
 }
 
@@ -403,7 +403,7 @@ for my $attr (@travis_array_attributes) {
     is      => 'ro',
     isa     => 'ArrayRef[Str]',
     lazy    => 1,
-    default => sub { [] },
+    default => sub { defined $_[0]->payload->{$attr} ? $_[0]->payload->{$attr} : [] },
   );
 }
 
