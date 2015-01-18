@@ -545,7 +545,7 @@ sub configure {
       $self->add_plugins([
         'ChangelogFromGit' => {
           max_age => 99999,
-          tag_regexp => '^v(.+)$',
+          tag_regexp => '^v?(\d.+)$',
           file_name => 'Changes',
           wrap_column => 74,
           debug => 0,
