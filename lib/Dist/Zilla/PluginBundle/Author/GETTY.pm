@@ -36,6 +36,7 @@ are default):
   no_changes = 0
   no_changelog_from_git = 0
   no_podweaver = 0
+  module_build_tiny = 0
   installrelease_command = cpanm .
 
 In default configuration it is equivalent to:
@@ -316,7 +317,7 @@ has no_makemaker => (
   is      => 'ro',
   isa     => 'Bool',
   lazy    => 1,
-  default => sub { $_[0]->payload->{no_makemaker} || $_[0]->is_alien },
+  default => sub { $_[0]->payload->{no_makemaker} || $_[0]->is_alien || $_[0]->xs },
 );
 
 has no_podweaver => (
@@ -324,6 +325,13 @@ has no_podweaver => (
   isa     => 'Bool',
   lazy    => 1,
   default => sub { $_[0]->payload->{no_podweaver} },
+);
+
+has xs => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{xs} },
 );
 
 has is_task => (
@@ -435,6 +443,12 @@ sub configure {
     -remove => [@removes],
   });
 
+  if ($self->xs) {
+    $self->add_plugins(qw(
+      ModuleBuildTiny
+    ));
+  }
+
   unless ($self->manual_version) {
     if ($self->is_task) {
       my $v_format = q<{{cldr('yyyyMMdd')}}>
@@ -468,11 +482,12 @@ sub configure {
     }
   }
 
-	$self->add_plugins(qw(
-		PkgVersion
-		MetaConfig
-		MetaJSON
-		PodSyntaxTests
+  $self->add_plugins(qw(
+    PkgVersion
+    MetaConfig
+    MetaJSON
+    MetaYAML
+    PodSyntaxTests
   ));
 
   $self->add_plugins($self->no_github ? 'Repository' : 'GithubMeta');
@@ -520,12 +535,12 @@ sub configure {
   }
 
   unless ($self->no_cpan) {
-  	$self->add_plugins([
-  		'Authority' => {
-  			authority => 'cpan:'.$self->author,
-  			do_metadata => 1,
-  		}
-  	]);
+    $self->add_plugins([
+      'Authority' => {
+        authority => 'cpan:'.$self->author,
+        do_metadata => 1,
+      }
+    ]);
   }
 
   $self->add_plugins([

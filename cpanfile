@@ -8,6 +8,7 @@ requires 'Dist::Zilla::PluginBundle::Git', '2.009';
 requires 'Dist::Zilla::Plugin::ChangelogFromGit', '0.006';
 requires 'Dist::Zilla::Plugin::Git::CheckFor::CorrectBranch', '0.006';
 requires 'Dist::Zilla::Plugin::GithubMeta', '0.28';
+requires 'Dist::Zilla::Plugin::ModuleBuildTiny', '0.008';
 requires 'Dist::Zilla::Plugin::InstallRelease', '0.008';
 requires 'Dist::Zilla::Plugin::MakeMaker::SkipInstall', '1.100';
 requires 'Dist::Zilla::Plugin::PodWeaver', '3.101641';
