@@ -374,7 +374,7 @@ for my $attr (@run_attributes) {
   );
 }
 
-my @alien_options = qw( repo name bins pattern_prefix pattern_suffix pattern_version pattern autoconf_with_pic isolate_dynamic );
+my @alien_options = qw( msys repo name bins pattern_prefix pattern_suffix pattern_version pattern autoconf_with_pic isolate_dynamic );
 
 my @alien_attributes = map { 'alien_'.$_ } @alien_options;
 
@@ -386,6 +386,13 @@ for my $attr (@alien_attributes) {
     default => sub { defined $_[0]->payload->{$attr} ? $_[0]->payload->{$attr} : "" },
   );
 }
+
+has alien_bin_requires => (
+  is      => 'ro',
+  isa     => 'ArrayRef[Str]',
+  lazy    => 1,
+  default => sub { defined $_[0]->payload->{alien_bin_requires} ? $_[0]->payload->{alien_bin_requires} : [] },
+);
 
 my @travis_str_options = (
   @Dist::Zilla::Plugin::TravisCI::bools,
@@ -420,7 +427,7 @@ for my $attr (@travis_array_attributes) {
   );
 }
 
-sub mvp_multivalue_args { @travis_array_attributes, @run_attributes }
+sub mvp_multivalue_args { @travis_array_attributes, @run_attributes, 'alien_bin_requires' }
 
 sub configure {
   my ($self) = @_;
@@ -516,6 +523,9 @@ sub configure {
     for (@alien_options) {
       my $func = 'alien_'.$_;
       $alien_values{$_} = $self->$func if defined $self->$func && $self->$func ne '';
+    }
+    if(@{ $self->alien_bin_requires }) {
+      $alien_values{bin_requires} = $self->alien_bin_requires;
     }
     $self->add_plugins([
       'Alien' => \%alien_values,
