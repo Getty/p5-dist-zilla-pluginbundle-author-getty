@@ -36,7 +36,7 @@ are default):
   no_changes = 0
   no_changelog_from_git = 0
   no_podweaver = 0
-  module_build_tiny = 0
+  xs = 0
   installrelease_command = cpanm .
 
 In default configuration it is equivalent to:
@@ -167,6 +167,11 @@ L<Dist::Zilla::Plugin::NextRelease> will be used.
 =head2 no_podweaver
 
 If set to 1, then L<Dist::Zilla::Plugin::PodWeaver> is not used.
+
+=head2 xs
+
+If set to 1, then L<Dist::Zilla::Plugin::ModuleBuildTiny>. This will also
+automatically set B<no_makemaker> to 1.
 
 =head2 no_install
 
