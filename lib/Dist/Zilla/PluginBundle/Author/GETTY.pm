@@ -486,7 +486,6 @@ sub configure {
     PkgVersion
     MetaConfig
     MetaJSON
-    MetaYAML
     PodSyntaxTests
   ));
 
