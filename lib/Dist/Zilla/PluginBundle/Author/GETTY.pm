@@ -441,9 +441,9 @@ sub configure {
   $self->log_fatal("no_install can't be used together with no_makemaker")
     if $self->no_install and $self->no_makemaker;
 
-  $self->add_plugins(qw(
-    Git::GatherDir
-  ));
+  $self->add_plugins([ 'Git::GatherDir' => {
+    include_dotfiles => 1,
+  }]);
 
   my @removes = ('GatherDir');
   if ($self->no_cpan || $self->no_makemaker) {
