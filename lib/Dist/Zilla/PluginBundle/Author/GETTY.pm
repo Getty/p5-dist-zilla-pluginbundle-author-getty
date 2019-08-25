@@ -41,7 +41,10 @@ are default):
 
 In default configuration it is equivalent to:
 
-  [@Basic]
+  [@Filter]
+  -bundle = @Basic
+  -remove = GatherDir
+  -remove = PruneCruft
 
   [Git::NextVersion]
   [PkgVersion]
@@ -445,7 +448,7 @@ sub configure {
     include_dotfiles => 1,
   }]);
 
-  my @removes = ('GatherDir');
+  my @removes = ('GatherDir','PruneCruft');
   if ($self->no_cpan || $self->no_makemaker) {
     push @removes, 'UploadToCPAN' if $self->no_cpan;
     push @removes, 'MakeMaker' if $self->no_makemaker;
