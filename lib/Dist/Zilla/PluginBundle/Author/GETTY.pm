@@ -377,7 +377,7 @@ for my $attr (@run_attributes) {
   );
 }
 
-my @alien_options = qw( msys repo name bins pattern_prefix pattern_suffix pattern_version pattern autoconf_with_pic isolate_dynamic );
+my @alien_options = qw( msys repo name bins pattern_prefix pattern_suffix pattern_version pattern autoconf_with_pic isolate_dynamic version_check );
 
 my @alien_attributes = map { 'alien_'.$_ } @alien_options;
 
