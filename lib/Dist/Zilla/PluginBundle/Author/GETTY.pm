@@ -29,7 +29,7 @@ are default):
   release_branch = master
   weaver_config = @Author::GETTY
   no_cpan = 0
-  no_travis = 0
+  no_travis = 1 # deactivate by default now
   no_install = 0
   no_makemaker = 0
   no_installrelease = 0
@@ -105,6 +105,15 @@ You can also use shortcuts for integrating L<Dist::Zilla::Plugin::Run>:
   run_test = script/tester.pl --name %n --version %v some_file.ext
   run_if_release_test = ./Build install
   run_if_release_test = make install
+
+You can also use add up configuration for L<Dist::Zilla::Plugin::Git::GatherDir>,
+excluding I<root> or I<prefix>:
+
+  [@Author::GETTY]
+  gather_include_dotfiles = 1 # activated by default
+  gather_include_untracked = 0
+  gather_exclude_filename = dir/skip
+  gather_exclude_match = ^local_
 
 You can use all options of L<Dist::Zilla::Plugin::TravisCI> just by prefix
 them with B<travis_>, like here:
