@@ -297,7 +297,7 @@ has no_travis => (
   is      => 'ro',
   isa     => 'Bool',
   lazy    => 1,
-  default => sub { $_[0]->payload->{no_travis} },
+  default => sub { exists $_[0]->payload->{no_travis} ? $_[0]->payload->{no_travis} : 1 },
 );
 
 has no_changelog_from_git => (
@@ -361,6 +361,32 @@ has weaver_config => (
   isa     => 'Str',
   lazy    => 1,
   default => sub { $_[0]->payload->{weaver_config} || '@Author::GETTY' },
+);
+
+my @gather_array_options = qw( exclude_filename exclude_match );
+my @gather_array_attributes = map { 'gather_'.$_ } @gather_array_options;
+
+for my $attr (@gather_array_attributes) {
+  has $attr => (
+    is      => 'ro',
+    isa     => 'ArrayRef[Str]',
+    lazy    => 1,
+    default => sub { defined $_[0]->payload->{$attr} ? $_[0]->payload->{$attr} : [] },
+  );
+}
+
+has gather_include_dotfiles => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub { exists $_[0]->payload->{gather_include_dotfiles} ? $_[0]->payload->{gather_include_dotfiles} : 1 },
+);
+
+has gather_include_untracked  => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{gather_include_untracked} },
 );
 
 my @run_options = qw( after_build before_build before_release release after_release test );
@@ -430,7 +456,7 @@ for my $attr (@travis_array_attributes) {
   );
 }
 
-sub mvp_multivalue_args { @travis_array_attributes, @run_attributes, 'alien_bin_requires' }
+sub mvp_multivalue_args { @travis_array_attributes, @run_attributes, @gather_array_attributes, 'alien_bin_requires' }
 
 sub configure {
   my ($self) = @_;
@@ -445,7 +471,10 @@ sub configure {
     if $self->no_install and $self->no_makemaker;
 
   $self->add_plugins([ 'Git::GatherDir' => {
-    include_dotfiles => 1,
+    include_dotfiles => $self->gather_include_dotfiles,
+    include_untracked => $self->gather_include_untracked,
+    scalar @{$self->gather_exclude_filename} > 0 ? ( exclude_filename => $self->gather_exclude_filename ) : (),
+    scalar @{$self->gather_exclude_match} > 0 ? ( exclude_match => $self->gather_exclude_match ) : (),
   }]);
 
   my @removes = ('GatherDir','PruneCruft');
