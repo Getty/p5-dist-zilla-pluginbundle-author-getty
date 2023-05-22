@@ -26,6 +26,7 @@ are default):
 
   [@Author::GETTY]
   author = GETTY
+  deprecated = 0
   release_branch = master
   weaver_config = @Author::GETTY
   no_cpan = 0
@@ -140,6 +141,10 @@ only required parameter here is C<alien_repo>:
 
 This is used to name the L<CPAN|http://www.cpan.org/> author of the
 distribution. See L<Dist::Zilla::Plugin::Authority/authority>.
+
+=head2 deprecated
+
+Adds L<Dist::Zilla::Plugin::Deprecated> to the distribution.
 
 =head2 release_branch
 
@@ -286,6 +291,13 @@ has release_branch => (
   isa     => 'Str',
   lazy    => 1,
   default => sub { $_[0]->payload->{release_branch} || 'master' },
+);
+
+has deprecated => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{deprecated} },
 );
 
 has no_github => (
@@ -499,6 +511,12 @@ sub configure {
   if ($self->xs) {
     $self->add_plugins(qw(
       ModuleBuildTiny
+    ));
+  }
+
+  if ($self->deprecated) {
+    $self->add_plugins(qw(
+      Deprecated
     ));
   }
 
