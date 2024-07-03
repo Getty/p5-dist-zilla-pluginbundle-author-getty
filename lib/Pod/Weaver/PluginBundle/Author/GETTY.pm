@@ -45,11 +45,17 @@ sub mvp_bundle_config {
   }
 
   push @plugins, (
-    [ '@GETTY/Leftovers', _exp('Leftovers'), {} ],
-    [ '@GETTY/postlude',  _exp('Region'),    { region_name => 'postlude' } ],
-    [ '@GETTY/Bugs',      _exp('Bugs'),   {} ],
-    [ '@GETTY/Authors',   _exp('Authors'),   {} ],
-    [ '@GETTY/Legal',     _exp('Legal'),     {} ],
+    [ '@GETTY/Leftovers', _exp('Leftovers'),    {} ],
+    [ '@GETTY/postlude',  _exp('Region'),       { region_name => 'postlude' } ],
+    [ '@GETTY/Support',   _exp('Support'),      {
+      all_modules => 1,
+      perldoc => 0,
+      websites => 'none',
+      bugs => 'none',
+    } ],
+    [ '@GETTY/Bugs',      _exp('Bugs'),         {} ],
+    [ '@GETTY/Authors',   _exp('Authors'),      {} ],
+    [ '@GETTY/Legal',     _exp('Legal'),        {} ],
     [ '@GETTY/List',      _exp('-Transformer'), { 'transformer' => 'List' } ],
   );
 
