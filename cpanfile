@@ -19,7 +19,6 @@ requires 'Pod::Elemental', '0.102362';
 requires 'Pod::Elemental::Transformer::List', '0.101620';
 requires 'Pod::Weaver', '3.101638';
 requires 'Pod::Weaver::Section::Support', '1.014';
-requires 'Pod::Weaver::Plugin::Encoding', '0.03';
 
 on test => sub {
   requires 'Test::More', '0.96';

@@ -24,16 +24,15 @@ sub _exp { Pod::Weaver::Config::Assembler->expand_package($_[0]) }
 sub mvp_bundle_config {
   my @plugins;
   push @plugins, (
-    [ '@GETTY/CorePrep',    _exp('@CorePrep'), {} ],
-    [ '@GETTY/Encoding',    _exp('-Encoding'), { encoding => 'UTF-8' } ],
-    [ '@GETTY/Name',        _exp('Name'),      {} ],
-    [ '@GETTY/Version',     _exp('Version'),   {} ],
+    [ '@GETTY/CorePrep',       _exp('@CorePrep'), {} ],
+    [ '@GETTY/SingleEncoding', _exp('-SingleEncoding'), {} ],
+    [ '@GETTY/Name',           _exp('Name'),      {} ],
+    [ '@GETTY/Version',        _exp('Version'),   {} ],
 
     [ '@GETTY/Prelude',     _exp('Region'),  { region_name => 'prelude'     } ],
     [ '@GETTY/Synopsis',    _exp('Generic'), { header      => 'SYNOPSIS'    } ],
     [ '@GETTY/Description', _exp('Generic'), { header      => 'DESCRIPTION' } ],
     [ '@GETTY/Overview',    _exp('Generic'), { header      => 'OVERVIEW'    } ],
-
     [ '@GETTY/Stability',   _exp('Generic'), { header      => 'STABILITY'   } ],
   );
 
