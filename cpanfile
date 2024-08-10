@@ -1,6 +1,6 @@
 
 requires 'App::cpanminus', '1.6002';
-requires 'Dist::Zilla', '4.300030';
+requires 'Dist::Zilla', '6.032';
 requires 'Dist::Zilla::Plugin::Alien', '0.011';
 requires 'Dist::Zilla::Plugin::Authority', '1.006';
 requires 'Dist::Zilla::PluginBundle::Git', '2.009';
@@ -19,6 +19,7 @@ requires 'Pod::Elemental', '0.102362';
 requires 'Pod::Elemental::Transformer::List', '0.101620';
 requires 'Pod::Weaver', '3.101638';
 requires 'Pod::Weaver::Section::Support', '1.014';
+requires 'Pod::Weaver::Plugin::Encoding', '0.03';
 
 on test => sub {
   requires 'Test::More', '0.96';

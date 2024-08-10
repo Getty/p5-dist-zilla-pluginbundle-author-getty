@@ -1,7 +1,8 @@
-use strict;
-use warnings;
 package Pod::Weaver::PluginBundle::Author::GETTY;
 # ABSTRACT: GETTY's default Pod::Weaver config
+
+use strict;
+use warnings;
 
 =head1 DESCRIPTION
 
@@ -24,6 +25,7 @@ sub mvp_bundle_config {
   my @plugins;
   push @plugins, (
     [ '@GETTY/CorePrep',    _exp('@CorePrep'), {} ],
+    [ '@GETTY/Encoding',    _exp('-Encoding'), { encoding => 'UTF-8' } ],
     [ '@GETTY/Name',        _exp('Name'),      {} ],
     [ '@GETTY/Version',     _exp('Version'),   {} ],
 
