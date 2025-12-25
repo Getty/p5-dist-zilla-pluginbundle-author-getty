@@ -2,7 +2,6 @@ package Dist::Zilla::PluginBundle::Author::GETTY;
 # ABSTRACT: BeLike::GETTY when you build your dists
 our $VERSION = '0.204';
 use Moose;
-use Moose::Autobox;
 use Dist::Zilla;
 with 'Dist::Zilla::Role::PluginBundle::Easy';
 
@@ -555,5 +554,5 @@ sub configure {
 }
 
 __PACKAGE__->meta->make_immutable;
+
 no Moose;
-1;
