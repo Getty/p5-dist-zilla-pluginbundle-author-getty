@@ -16,6 +16,7 @@ requires 'Dist::Zilla::Plugin::Repository', '0.19';
 requires 'Dist::Zilla::Plugin::Prereqs::FromCPANfile', '0';
 requires 'Dist::Zilla::Plugin::Run', '0.018';
 requires 'Dist::Zilla::Plugin::TaskWeaver', '0.101624';
+requires 'Moose::Autobox', '0';
 requires 'Pod::Elemental', '0.102362';
 requires 'Pod::Elemental::Transformer::List', '0.101620';
 requires 'Pod::Weaver', '3.101638';
