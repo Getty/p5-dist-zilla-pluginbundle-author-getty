@@ -467,8 +467,12 @@ sub configure {
     }
   }
 
+  # PkgVersion only when NOT using @Git::VersionManager (which uses RewriteVersion)
+  if ($self->is_task || $self->manual_version) {
+    $self->add_plugins('PkgVersion');
+  }
+
   $self->add_plugins(qw(
-    PkgVersion
     MetaConfig
     MetaJSON
     PodSyntaxTests
@@ -537,7 +541,7 @@ sub configure {
 
   unless ($self->is_task || $self->manual_version) {
     $self->add_bundle('@Git::VersionManager' => {
-      'RewriteVersion::Transitional.skip_version_provider' => 1,
+      'RewriteVersion::Transitional.fallback_version_provider' => 'Git::NextVersion',
       'Git::Tag.tag_format' => '%v',
       'Git::Push.push_to' => 'origin',
       $self->no_changes ? ( 'NextRelease.format' => '' ) : (),
