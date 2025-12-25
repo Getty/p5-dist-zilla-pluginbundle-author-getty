@@ -148,7 +148,7 @@ By default a dzil release would release to L<CPAN|http://www.cpan.org/>.
 =head2 no_changes
 
 If set to 1, then L<Dist::Zilla::Plugin::NextRelease> (from @Git::VersionManager)
-will not generate changelog entries.
+will not generate changes entries.
 
 =head2 no_podweaver
 
