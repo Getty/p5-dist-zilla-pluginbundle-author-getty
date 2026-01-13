@@ -23,6 +23,7 @@ are default):
 
   [@Author::GETTY]
   author = GETTY
+  authority = ; optional, overrides author
   deprecated = 0
   release_branch = main
   weaver_config = @Author::GETTY
@@ -52,7 +53,9 @@ In default configuration it is equivalent to:
   install_command = cpanm .
 
   [Authority]
-  authority = cpan:GETTY
+  :version = 1.009
+  authority = cpan:GETTY ; or cpan:$authority if set
+  do_munging = 0
   do_metadata = 1
 
   [PodWeaver]
@@ -118,7 +121,18 @@ only required parameter here is C<alien_repo>:
 =head2 author
 
 This is used to name the L<CPAN|http://www.cpan.org/> author of the
-distribution. See L<Dist::Zilla::Plugin::Authority/authority>.
+distribution for the authority. See L<Dist::Zilla::Plugin::Authority/authority>.
+
+=head2 authority
+
+Override the authority used in metadata. Use this when uploading modules
+originally owned by another CPAN author. For example, to upload modules
+with ETHER as the authority:
+
+  [@Author::GETTY]
+  authority = ETHER
+
+If not set, defaults to the C<author> value.
 
 =head2 deprecated
 
@@ -253,6 +267,17 @@ has author => (
   isa     => 'Str',
   lazy    => 1,
   default => sub { $_[0]->payload->{author} || 'GETTY' },
+);
+
+has authority => (
+  is      => 'ro',
+  isa     => 'Str',
+  lazy    => 1,
+  default => sub {
+    my $self = shift;
+    return 'cpan:'.$self->payload->{authority} if $self->payload->{authority};
+    return 'cpan:'.$self->author;
+  },
 );
 
 has installrelease_command => (
@@ -556,7 +581,9 @@ sub configure {
   unless ($self->no_cpan) {
     $self->add_plugins([
       'Authority' => {
-        authority => 'cpan:'.$self->author,
+        ':version'  => '1.009',
+        authority   => $self->authority,
+        do_munging  => 0,
         do_metadata => 1,
       }
     ]);
