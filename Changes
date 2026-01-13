@@ -1,6 +1,7 @@
 {{$NEXT}}
 
-0.302     2026-01-13 22:58:13Z
+ - Add authority attribute to override x_authority metadata
+ - Fix Git::Push not being added after @Git::VersionManager
 
 0.301     2026-01-10 23:37:10Z
 
