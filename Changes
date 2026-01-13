@@ -1,3 +1,5 @@
+{{$NEXT}}
+
 0.303     2026-01-13 23:01:57Z
 
  - Add authority attribute to override x_authority metadata
