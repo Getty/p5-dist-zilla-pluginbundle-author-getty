@@ -613,9 +613,11 @@ sub configure {
     $self->add_bundle('@Git::VersionManager' => {
       'RewriteVersion::Transitional.fallback_version_provider' => 'Git::NextVersion',
       'Git::Tag.tag_format' => '%v',
-      'Git::Push.push_to' => 'origin',
       $self->no_changes ? ( 'NextRelease.format' => '' ) : (),
     });
+    $self->add_plugins([
+      'Git::Push' => { push_to => 'origin' }
+    ]);
   } else {
     $self->add_bundle('@Git' => {
       tag_format => '%v',
