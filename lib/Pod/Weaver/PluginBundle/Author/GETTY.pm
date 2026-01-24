@@ -185,13 +185,19 @@ sub mvp_bundle_config {
   }
 
   # IRC support
+  my $irc_user = $distmeta->{resources}{x_IRC_user};
   my $irc_url = $distmeta->{resources}{x_IRC};
   if ($irc_url) {
-    # Extract channel from irc:// URL
-    my ($channel) = $irc_url =~ m{/([^/]+)$};
-    push @parts, "=head2 IRC\n\nJoin C<$channel> on C<irc.perl.org> or message Getty directly.";
-  } else {
-    push @parts, "=head2 IRC\n\nYou can reach Getty on C<irc.perl.org> for questions and support.";
+    # Extract channel and server from irc:// URL
+    my ($server, $channel) = $irc_url =~ m{irc://([^/]+)/(.+)$};
+    $server ||= 'irc.perl.org';
+    if ($irc_user) {
+      push @parts, "=head2 IRC\n\nJoin C<$channel> on C<$server> or message $irc_user directly.";
+    } else {
+      push @parts, "=head2 IRC\n\nJoin C<$channel> on C<$server> for questions and support.";
+    }
+  } elsif ($irc_user) {
+    push @parts, "=head2 IRC\n\nYou can reach $irc_user on C<irc.perl.org> for questions and support.";
   }
 
   join "\n\n", @parts;

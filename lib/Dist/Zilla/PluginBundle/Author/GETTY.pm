@@ -216,6 +216,28 @@ Specify the IRC server. Defaults to C<irc.perl.org>.
   irc = #mychannel
   irc_server = irc.libera.chat
 
+=head2 irc_user
+
+Specify the IRC username to display in the SUPPORT section. Defaults to
+C<Getty> when author is C<GETTY>.
+
+If C<irc> is set but C<irc_user> is not, the IRC section will only mention
+the channel without referencing a specific user.
+
+  [@Author::GETTY]
+  irc = #perl
+  irc_user = Getty or ether
+
+=head2 adoptme
+
+If set to 1, this marks the distribution as available for adoption. This will
+add C<x_adoptme> metadata to the distribution, which is recognized by
+L<MetaCPAN|https://metacpan.org/> and displayed prominently to indicate that
+the current maintainer is looking for someone to take over the module.
+
+  [@Author::GETTY]
+  adoptme = 1
+
 =head1 SEE ALSO
 
 L<Dist::Zilla::Plugin::Alien>
@@ -392,6 +414,25 @@ has irc_server => (
   default => sub { $_[0]->payload->{irc_server} || 'irc.perl.org' },
 );
 
+has irc_user => (
+  is      => 'ro',
+  isa     => 'Str',
+  lazy    => 1,
+  default => sub {
+    my $self = shift;
+    return $self->payload->{irc_user} if $self->payload->{irc_user};
+    return 'Getty' if $self->author eq 'GETTY';
+    return '';
+  },
+);
+
+has adoptme => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{adoptme} },
+);
+
 my @gather_array_options = qw( exclude_filename exclude_match );
 my @gather_array_attributes = map { 'gather_'.$_ } @gather_array_options;
 
@@ -541,10 +582,17 @@ sub configure {
     my $channel = $self->irc;
     $channel = '#' . $channel unless $channel =~ /^#/;
     my $irc_url = 'irc://' . $self->irc_server . '/' . $channel;
+    my %irc_resources = ( 'x_IRC' => $irc_url );
+    $irc_resources{'x_IRC_user'} = $self->irc_user if $self->irc_user;
     $self->add_plugins([
-      'MetaResources' => {
-        'x_IRC' => $irc_url,
-      }
+      'MetaResources' => \%irc_resources
+    ]);
+  }
+
+  # Add adoptme metadata if configured
+  if ($self->adoptme) {
+    $self->add_plugins([
+      'MetaResources' => 'adoptme' => { 'x_adoptme' => 1 }
     ]);
   }
 
