@@ -474,8 +474,10 @@ for my $attr (@run_attributes) {
 }
 
 my @alien_options = qw( msys repo name bins pattern_prefix pattern_suffix pattern_version pattern autoconf_with_pic isolate_dynamic version_check );
+my @alien_array_options = qw( build_command install_command test_command );
 
 my @alien_attributes = map { 'alien_'.$_ } @alien_options;
+my @alien_array_attributes = map { 'alien_'.$_ } @alien_array_options;
 
 for my $attr (@alien_attributes) {
   has $attr => (
@@ -486,6 +488,15 @@ for my $attr (@alien_attributes) {
   );
 }
 
+for my $attr (@alien_array_attributes) {
+  has $attr => (
+    is      => 'ro',
+    isa     => 'ArrayRef[Str]',
+    lazy    => 1,
+    default => sub { defined $_[0]->payload->{$attr} ? $_[0]->payload->{$attr} : [] },
+  );
+}
+
 has alien_bin_requires => (
   is      => 'ro',
   isa     => 'ArrayRef[Str]',
@@ -493,7 +504,7 @@ has alien_bin_requires => (
   default => sub { defined $_[0]->payload->{alien_bin_requires} ? $_[0]->payload->{alien_bin_requires} : [] },
 );
 
-sub mvp_multivalue_args { @run_attributes, @gather_array_attributes, 'alien_bin_requires' }
+sub mvp_multivalue_args { @run_attributes, @gather_array_attributes, 'alien_bin_requires', @alien_array_attributes }
 
 sub configure {
   my ($self) = @_;
@@ -601,6 +612,10 @@ sub configure {
     for (@alien_options) {
       my $func = 'alien_'.$_;
       $alien_values{$_} = $self->$func if defined $self->$func && $self->$func ne '';
+    }
+    for (@alien_array_options) {
+      my $func = 'alien_'.$_;
+      $alien_values{$_} = $self->$func if @{ $self->$func };
     }
     if(@{ $self->alien_bin_requires }) {
       $alien_values{bin_requires} = $self->alien_bin_requires;

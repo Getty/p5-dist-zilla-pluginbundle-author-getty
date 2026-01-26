@@ -161,6 +161,9 @@ For building distributions that wrap external libraries:
 | `alien_isolate_dynamic` | Isolate dynamic libraries |
 | `alien_version_check` | Command to check installed version |
 | `alien_bin_requires` | Build dependencies (multi-value) |
+| `alien_build_command` | Custom build commands (multi-value) |
+| `alien_install_command` | Custom install commands (multi-value) |
+| `alien_test_command` | Custom test commands (multi-value) |
 
 ## Examples
 
