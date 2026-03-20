@@ -38,6 +38,16 @@ copyright_holder = Your Name
 
 Custom POD commands that stay inline with your code:
 
+**Section shortcuts (→ =head1):**
+
+| Command | Result |
+|---------|--------|
+| `=synopsis` | `=head1 SYNOPSIS` |
+| `=description` | `=head1 DESCRIPTION` |
+| `=seealso` | `=head1 SEE ALSO` |
+
+**Inline commands (→ =head2):**
+
 | Command | Purpose |
 |---------|---------|
 | `=attr` | Document attributes |
@@ -45,11 +55,8 @@ Custom POD commands that stay inline with your code:
 | `=func` | Document functions |
 | `=opt` | Document CLI options |
 | `=env` | Document environment variables |
-| `=event` | Document events |
 | `=hook` | Document hooks |
-| `=resource` | Document resources/features |
 | `=example` | Document examples |
-| `=seealso` | Document related modules |
 
 Auto-generated sections: NAME, VERSION, SUPPORT, CONTRIBUTING, AUTHORS, LICENSE
 
@@ -75,7 +82,17 @@ Auto-generated sections: NAME, VERSION, SUPPORT, CONTRIBUTING, AUTHORS, LICENSE
 | `no_install` | `0` | Make distribution non-installable |
 | `no_makemaker` | `0` | Don't use MakeMaker (auto-set for XS/Alien) |
 | `no_installrelease` | `0` | Don't install after release |
-| `xs` | `0` | Use ModuleBuildTiny for XS modules |
+| `include_readme` | `0` | Ship `README.md` in the distribution (excluded by default) |
+| `xs` | `0` | Use ModuleBuildTiny for pure-Perl XS modules |
+
+### XS with Alien Dependencies
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `xs_alien` | - | Alien module for XS (e.g., `Alien::TinyCDB`) |
+| `xs_object` | - | Override XS object name (default: derived from Alien name) |
+
+When `xs_alien` is set, MakeMaker::Awesome is automatically configured with the correct LIBS, INC, and OBJECT settings.
 
 ### Version Control
 
@@ -204,11 +221,27 @@ no_cpan = 1
 no_installrelease = 1
 ```
 
-### XS Module
+### XS Module (Pure Perl)
 
 ```ini
 [@Author::GETTY]
 xs = 1
+```
+
+### XS Module with Alien Dependency
+
+```ini
+[@Author::GETTY]
+xs_alien = Alien::TinyCDB
+```
+
+### Include README.md in Release Tarballs
+
+By default, `README.md` is excluded from gathered distribution files so GitHub-focused Markdown does not end up in release tarballs or render awkwardly on MetaCPAN.
+
+```ini
+[@Author::GETTY]
+include_readme = 1
 ```
 
 ### Task Distribution
@@ -286,12 +319,43 @@ release_branch = main
 ; handles versioning, changelog, commits, tags, and push
 ```
 
+## AI Skills
+
+This distribution includes a skill file (`share/claude-skill.yaml`) for AI coding assistants like [Claude Code](https://claude.ai/code). AI skills are structured instructions that help AI tools understand project-specific conventions, patterns, and configurations.
+
+### Using the Skill
+
+For Claude Code, place the skill in your project's `.claude/skills/` directory:
+
+```bash
+mkdir -p .claude/skills/dzil-author-getty
+cp share/claude-skill.yaml .claude/skills/dzil-author-getty/SKILL.md
+```
+
+The skill teaches AI assistants about:
+
+- Required dist.ini metadata
+- All configuration options and their purposes
+- POD command shortcuts (`=synopsis`, `=attr`, etc.)
+- Conventions (`copyright_year` in `dist.ini`, inline POD, `cpanfile` for deps)
+- XS with Alien setup using `xs_alien`
+
+### Creating Skills for Your Projects
+
+AI skills are YAML/Markdown files that describe project conventions. They help AI tools generate code that follows your patterns consistently. Consider creating skills for:
+
+- Build system configurations
+- Coding conventions and style guides
+- Framework-specific patterns
+- API usage patterns
+
 ## See Also
 
 - [Dist::Zilla](https://metacpan.org/pod/Dist::Zilla)
 - [Pod::Weaver](https://metacpan.org/pod/Pod::Weaver)
 - [Dist::Zilla::PluginBundle::Git::VersionManager](https://metacpan.org/pod/Dist::Zilla::PluginBundle::Git::VersionManager)
 - [Dist::Zilla::Plugin::Alien](https://metacpan.org/pod/Dist::Zilla::Plugin::Alien)
+- [Dist::Zilla::Plugin::MakeMaker::Awesome](https://metacpan.org/pod/Dist::Zilla::Plugin::MakeMaker::Awesome)
 
 ## License
 

@@ -33,7 +33,9 @@ are default):
   no_installrelease = 0
   no_changes = 0
   no_podweaver = 0
+  include_readme = 0
   xs = 0
+  xs_alien = ; e.g. Alien::TinyCDB for XS with Alien
   installrelease_command = cpanm .
 
 In default configuration it is equivalent to:
@@ -98,6 +100,7 @@ You can also use add up configuration for L<Dist::Zilla::Plugin::Git::GatherDir>
 excluding I<root> or I<prefix>:
 
   [@Author::GETTY]
+  include_readme = 1 # README.md is excluded by default
   gather_include_dotfiles = 1 # activated by default
   gather_include_untracked = 0
   gather_exclude_filename = dir/skip
@@ -167,10 +170,22 @@ will not generate changes entries.
 
 If set to 1, then L<Dist::Zilla::Plugin::PodWeaver> is not used.
 
+=head2 include_readme
+
+By default, this bundle excludes F<README.md> from the gathered distribution
+files. This keeps GitHub-specific Markdown READMEs out of release tarballs and
+avoids awkward rendering on sites like MetaCPAN.
+
+Set this attribute to 1 if you explicitly want to ship F<README.md> in the
+distribution.
+
 =head2 xs
 
-If set to 1, then L<Dist::Zilla::Plugin::ModuleBuildTiny>. This will also
-automatically set B<no_makemaker> to 1.
+If set to 1, then L<Dist::Zilla::Plugin::ModuleBuildTiny> is used for building.
+This is suitable for pure-Perl XS modules that don't need external libraries.
+This will also automatically set B<no_makemaker> to 1.
+
+For XS modules that depend on Alien-provided libraries, use B<xs_alien> instead.
 
 =head2 no_install
 
@@ -238,6 +253,28 @@ the current maintainer is looking for someone to take over the module.
   [@Author::GETTY]
   adoptme = 1
 
+=head2 xs_alien
+
+For XS modules that depend on an Alien-provided library, specify the Alien
+module name. This automatically sets up L<Dist::Zilla::Plugin::MakeMaker::Awesome>
+with the correct configuration:
+
+  [@Author::GETTY]
+  xs_alien = Alien::TinyCDB
+
+The XS object name is derived from the Alien module name (e.g., C<Alien::TinyCDB>
+becomes C<TinyCDB>). If your XS file has a different name, use B<xs_object>
+to override:
+
+  [@Author::GETTY]
+  xs_alien = Alien::TinyCDB
+  xs_object = MyXS
+
+=head2 xs_object
+
+Override the XS object name when using B<xs_alien>. By default, the object
+name is derived from the Alien module name (the last component after C<::>).
+
 =head1 SEE ALSO
 
 L<Dist::Zilla::Plugin::Alien>
@@ -253,6 +290,8 @@ L<Dist::Zilla::Plugin::Git::CheckFor::CorrectBranch>
 L<Dist::Zilla::Plugin::GithubMeta>
 
 L<Dist::Zilla::Plugin::InstallRelease>
+
+L<Dist::Zilla::Plugin::MakeMaker::Awesome>
 
 L<Dist::Zilla::Plugin::MakeMaker::SkipInstall>
 
@@ -362,7 +401,7 @@ has no_makemaker => (
   is      => 'ro',
   isa     => 'Bool',
   lazy    => 1,
-  default => sub { $_[0]->payload->{no_makemaker} || $_[0]->is_alien || $_[0]->xs },
+  default => sub { $_[0]->payload->{no_makemaker} || $_[0]->is_alien || $_[0]->xs || ($_[0]->xs_alien ? 1 : 0) },
 );
 
 has no_podweaver => (
@@ -370,6 +409,13 @@ has no_podweaver => (
   isa     => 'Bool',
   lazy    => 1,
   default => sub { $_[0]->payload->{no_podweaver} },
+);
+
+has include_readme => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{include_readme} },
 );
 
 has xs => (
@@ -431,6 +477,20 @@ has adoptme => (
   isa     => 'Bool',
   lazy    => 1,
   default => sub { $_[0]->payload->{adoptme} },
+);
+
+has xs_alien => (
+  is      => 'ro',
+  isa     => 'Str',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{xs_alien} || '' },
+);
+
+has xs_object => (
+  is      => 'ro',
+  isa     => 'Str',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{xs_object} || '' },
 );
 
 my @gather_array_options = qw( exclude_filename exclude_match );
@@ -506,6 +566,16 @@ has alien_bin_requires => (
 
 sub mvp_multivalue_args { @run_attributes, @gather_array_attributes, 'alien_bin_requires', @alien_array_attributes }
 
+sub effective_gather_exclude_filename {
+  my ($self) = @_;
+
+  my @exclude = @{ $self->gather_exclude_filename };
+  push @exclude, 'README.md' unless $self->include_readme;
+
+  my %seen;
+  return [ grep { !$seen{$_}++ } @exclude ];
+}
+
 sub configure {
   my ($self) = @_;
 
@@ -521,7 +591,7 @@ sub configure {
   $self->add_plugins([ 'Git::GatherDir' => {
     include_dotfiles => $self->gather_include_dotfiles,
     include_untracked => $self->gather_include_untracked,
-    scalar @{$self->gather_exclude_filename} > 0 ? ( exclude_filename => $self->gather_exclude_filename ) : (),
+    scalar @{ $self->effective_gather_exclude_filename } > 0 ? ( exclude_filename => $self->effective_gather_exclude_filename ) : (),
     scalar @{$self->gather_exclude_match} > 0 ? ( exclude_match => $self->gather_exclude_match ) : (),
   }]);
 
@@ -539,6 +609,27 @@ sub configure {
     $self->add_plugins(qw(
       ModuleBuildTiny
     ));
+  }
+
+  if ($self->xs_alien) {
+    my $alien = $self->xs_alien;
+    # Get the XS object name from xs_object or derive from alien name
+    my $xs_object = $self->xs_object;
+    unless ($xs_object) {
+      # Derive from Alien module name (e.g., Alien::TinyCDB -> TinyCDB)
+      $xs_object = $alien;
+      $xs_object =~ s/.*:://;
+    }
+    $self->add_plugins([
+      'MakeMaker::Awesome' => {
+        header => "use $alien;",
+        WriteMakefile_arg => [
+          "LIBS => [ $alien->libs ]",
+          "INC => $alien->cflags",
+          "OBJECT => '${xs_object}\$(OBJ_EXT)'",
+        ],
+      }
+    ]);
   }
 
   if ($self->deprecated) {

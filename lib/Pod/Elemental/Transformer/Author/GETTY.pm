@@ -1,5 +1,5 @@
 package Pod::Elemental::Transformer::Author::GETTY;
-# ABSTRACT: Transform custom POD commands to =head2
+# ABSTRACT: Transform custom POD commands to =head1 and =head2
 our $VERSION = '0.305';
 use Moose;
 with 'Pod::Elemental::Transformer';
@@ -13,13 +13,20 @@ use namespace::autoclean;
 
 =head1 DESCRIPTION
 
-This transformer converts custom POD commands into standard C<=head2> commands.
-The commands are left in place (not collected into sections), so documentation
-stays close to the code it documents.
+This transformer converts custom POD commands into standard C<=head1> and
+C<=head2> commands. The commands are left in place (not collected into
+sections), so documentation stays close to the code it documents.
 
 =head1 SUPPORTED COMMANDS
 
-The following commands are transformed to C<=head2>:
+=head2 Section Commands (transform to C<=head1>)
+
+=for :list
+* C<=synopsis> - transforms to C<=head1 SYNOPSIS>
+* C<=description> - transforms to C<=head1 DESCRIPTION>
+* C<=seealso> - transforms to C<=head1 SEE ALSO>
+
+=head2 Inline Commands (transform to C<=head2>)
 
 =for :list
 * C<=attr> - for documenting attributes
@@ -27,37 +34,47 @@ The following commands are transformed to C<=head2>:
 * C<=func> - for documenting functions
 * C<=opt> - for documenting CLI options
 * C<=env> - for documenting environment variables
-* C<=event> - for documenting events
 * C<=hook> - for documenting hooks
-* C<=resource> - for documenting resources/features
-* C<=seealso> - for documenting related modules
 * C<=example> - for documenting examples
 
 =cut
 
-my @COMMANDS = qw(
+# Commands that transform to =head1 with specific content
+my %HEAD1_COMMANDS = (
+  synopsis    => 'SYNOPSIS',
+  description => 'DESCRIPTION',
+  seealso     => 'SEE ALSO',
+);
+
+# Commands that transform to =head2 (keeping content as-is)
+my @HEAD2_COMMANDS = qw(
   attr
   method
   func
   opt
   env
-  event
   hook
-  resource
-  seealso
   example
 );
 
-my %IS_COMMAND = map { $_ => 1 } @COMMANDS;
+my %IS_HEAD2_COMMAND = map { $_ => 1 } @HEAD2_COMMANDS;
 
 sub transform_node {
   my ($self, $node) = @_;
 
   for my $child (@{ $node->children }) {
-    # Transform matching commands to head2
-    if ($child->isa('Pod::Elemental::Element::Pod5::Command')
-        && $IS_COMMAND{ $child->command }) {
-      $child->{command} = 'head2';
+    if ($child->isa('Pod::Elemental::Element::Pod5::Command')) {
+      my $cmd = $child->command;
+
+      # Transform head1 commands (replace content with fixed heading)
+      if (my $heading = $HEAD1_COMMANDS{$cmd}) {
+        $child->{command} = 'head1';
+        $child->{content} = $heading;
+      }
+      # Transform head2 commands (keep content)
+      elsif ($IS_HEAD2_COMMAND{$cmd}) {
+        $child->{command} = 'head2';
+      }
     }
 
     # Recurse into nested structures
