@@ -253,6 +253,17 @@ the current maintainer is looking for someone to take over the module.
   [@Author::GETTY]
   adoptme = 1
 
+=head2 alien_build
+
+Set to 1 for distributions that use L<Alien::Build> to provide a C library.
+This automatically sets B<no_makemaker> to 1 and adds
+L<Dist::Zilla::Plugin::AlienBuild>, which generates a C<Makefile.PL> driven
+by C<Alien::Build::MM>. Ship an C<alienfile> in the distribution root to
+describe how to probe for or build the library.
+
+  [@Author::GETTY]
+  alien_build = 1
+
 =head2 xs_alien
 
 For XS modules that depend on an Alien-provided library, specify the Alien
@@ -401,7 +412,14 @@ has no_makemaker => (
   is      => 'ro',
   isa     => 'Bool',
   lazy    => 1,
-  default => sub { $_[0]->payload->{no_makemaker} || $_[0]->is_alien || $_[0]->xs || ($_[0]->xs_alien ? 1 : 0) },
+  default => sub { ($_[0]->payload->{no_makemaker} || $_[0]->is_alien || $_[0]->xs || $_[0]->xs_alien || $_[0]->alien_build) ? 1 : 0 },
+);
+
+has alien_build => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{alien_build} },
 );
 
 has no_podweaver => (
@@ -609,6 +627,10 @@ sub configure {
     $self->add_plugins(qw(
       ModuleBuildTiny
     ));
+  }
+
+  if ($self->alien_build) {
+    $self->add_plugins('AlienBuild');
   }
 
   if ($self->xs_alien) {
