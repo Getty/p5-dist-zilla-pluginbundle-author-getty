@@ -412,7 +412,7 @@ has no_makemaker => (
   is      => 'ro',
   isa     => 'Bool',
   lazy    => 1,
-  default => sub { ($_[0]->payload->{no_makemaker} || $_[0]->is_alien || $_[0]->xs || $_[0]->xs_alien || $_[0]->alien_build) ? 1 : 0 },
+  default => sub { ($_[0]->payload->{no_makemaker} || $_[0]->is_alien || $_[0]->xs || $_[0]->xs_alien) ? 1 : 0 },
 );
 
 has alien_build => (

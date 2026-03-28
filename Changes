@@ -8,7 +8,7 @@
  - Remove =event and =resource commands (not needed)
  - Include AI skill file (share/claude-skill.yaml) in distribution
  - Add alien_build parameter for Alien::Build-based distributions (adds AlienBuild plugin, implies no_makemaker)
- - Fix no_makemaker not being set when alien_build is used
+ - Fix no_makemaker incorrectly implied by alien_build (AlienBuild needs MakeMaker, not replaces it)
 
 0.304     2026-01-26 05:55:39Z
 
