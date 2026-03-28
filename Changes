@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.305     2026-03-28 00:00:54Z
 
  - Exclude README.md from gathered distribution files by default; allow opt-in with include_readme = 1
  - Add xs_alien and xs_object parameters for automatic MakeMaker::Awesome configuration
