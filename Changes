@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.307     2026-04-22 04:34:31Z
 
  - Forward commit_files_after_release option to @Git::VersionManager so files
    bumped in run_before_release actually land in the release commit
