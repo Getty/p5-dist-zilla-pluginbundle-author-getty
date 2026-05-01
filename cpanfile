@@ -2,6 +2,7 @@
 requires 'App::cpanminus', '1.6002';
 requires 'Dist::Zilla', '6.032';
 requires 'Dist::Zilla::Plugin::Alien', '0.011';
+requires 'Dist::Zilla::Plugin::Docker::API', '0.003';
 requires 'Dist::Zilla::Plugin::Authority', '1.006';
 requires 'Dist::Zilla::Plugin::Deprecated', '0.007';
 requires 'Dist::Zilla::Plugin::Git::CheckFor::CorrectBranch', '0.006';

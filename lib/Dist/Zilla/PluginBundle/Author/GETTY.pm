@@ -534,6 +534,34 @@ has xs_object => (
   default => sub { $_[0]->payload->{xs_object} || '' },
 );
 
+has docker_image => (
+  is      => 'ro',
+  isa     => 'Str',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{docker_image} // '' },
+);
+
+has docker_build => (
+  is      => 'ro',
+  isa     => 'Str',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{docker_build} // 'latest' },
+);
+
+has docker_release => (
+  is      => 'ro',
+  isa     => 'Str',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{docker_release} // '%v' },
+);
+
+has docker_local => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{docker_local} // 0 },
+);
+
 my @gather_array_options = qw( exclude_filename exclude_match );
 my @gather_array_attributes = map { 'gather_'.$_ } @gather_array_options;
 
@@ -823,6 +851,36 @@ sub configure {
       tag_format => '%v',
       push_to    => [ qw(origin) ],
     });
+  }
+
+  # Docker image support
+  if ($self->docker_image) {
+    my @build_tags = ( $self->docker_build );
+    my $release_push = 1;
+
+    if ($self->docker_local) {
+      # Add local tag variant (localhost:5000/image-name)
+      my $local_image = 'localhost:5000/' . $self->_strip_registry($self->docker_image);
+      push @build_tags, $local_image;
+      $release_push = 0;  # Never push when using local
+    }
+
+    $self->add_plugins([
+      'Docker::API' => {
+        image         => $self->docker_image,
+        build_tag     => \@build_tags,
+        release_tag   => [ $self->docker_release ],
+        release_push  => $release_push,
+        build_load    => 1,
+      },
+    ]);
+  }
+
+  # Helper to strip registry prefix
+  sub _strip_registry {
+    my ($self, $image) = @_;
+    $image =~ s{^.*/}{};
+    return $image;
   }
 }
 
