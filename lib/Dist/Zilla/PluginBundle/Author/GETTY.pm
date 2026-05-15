@@ -866,6 +866,7 @@ sub configure {
     MetaConfig
     MetaJSON
     PodSyntaxTests
+    Test::ChangesHasContent
   ));
 
   $self->add_plugins($self->no_github ? 'Repository' : [ 'GithubMeta' => { issues => 1 } ]);
