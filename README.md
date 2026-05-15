@@ -280,6 +280,50 @@ alien_pattern_version = ([\d\.]+)
 alien_pattern_suffix = \.tar\.gz
 ```
 
+### Docker Multi-Target Builds
+
+For distributions that build multiple Docker images (e.g., different Dockerfile targets):
+
+```ini
+[@Author::GETTY]
+docker_image = raudssus/karr
+
+[@Author::GETTY::Docker]
+target = runtime-root
+tags = latest %v
+
+[@Author::GETTY::Docker]
+target = runtime-user
+tags = user
+```
+
+Each `[@Author::GETTY::Docker]` subsection creates an independent `Dist::Zilla::Plugin::Docker::API` instance. Subsections inherit bundle-level defaults:
+
+| Bundle Option | Subsection Default |
+|---|---|
+| `docker_image` | Image name (required if subsection has no own `image`) |
+| `docker_tags` | Tags for build and release |
+| `docker_local` | Use localhost:5000/ registry (disables push on release) |
+
+**Validation:**
+- Each subsection must specify `target`
+- If no `image` set in subsection, inherits from bundle-level `docker_image`
+- Only one subsection without explicit `image` allowed per bundle (prevents ambiguity)
+- Overlapping image names between subsections are rejected
+
+**Default behavior (no `docker_image` at bundle level):**
+- Image defaults to distribution name (lowercased)
+- `local=1` is forced (localhost:5000/, no push)
+
+```ini
+[@Author::GETTY]
+
+[@Author::GETTY::Docker]
+target = runtime-root
+```
+
+This builds image `app_karr` locally, tagged `latest`, no push.
+
 ## Included Plugins
 
 In default configuration, the bundle is equivalent to:
