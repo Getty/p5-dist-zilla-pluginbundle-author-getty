@@ -290,23 +290,25 @@ docker_image = raudssus/karr
 
 [@Author::GETTY::Docker]
 target = runtime-root
-tags = latest %v
+tags = latest %v %m
 
 [@Author::GETTY::Docker]
 target = runtime-user
 tags = user
+local = 1
 ```
 
 Each `[@Author::GETTY::Docker]` subsection creates an independent `Dist::Zilla::Plugin::Docker::API` instance. Subsections inherit bundle-level defaults:
 
 | Bundle Option | Subsection Default |
 |---|---|
-| `docker_image` | Image name (required if subsection has no own `image`) |
-| `docker_tags` | Tags for build and release |
+| `docker_image` | Image name (inherited if subsection has no own `image`) |
+| `docker_tags` | Tags for build and release (default: `latest %v %m`) |
 | `docker_local` | Use localhost:5000/ registry (disables push on release) |
 
+**Tag templates:** `%v` (full version), `%m` (major version), `%n` (dist name)
+
 **Validation:**
-- Each subsection must specify `target`
 - If no `image` set in subsection, inherits from bundle-level `docker_image`
 - Only one subsection without explicit `image` allowed per bundle (prevents ambiguity)
 - Overlapping image names between subsections are rejected
@@ -314,15 +316,17 @@ Each `[@Author::GETTY::Docker]` subsection creates an independent `Dist::Zilla::
 **Default behavior (no `docker_image` at bundle level):**
 - Image defaults to distribution name (lowercased)
 - `local=1` is forced (localhost:5000/, no push)
+- Default tags: `latest %v %m`
 
 ```ini
 [@Author::GETTY]
 
 [@Author::GETTY::Docker]
-target = runtime-root
 ```
 
-This builds image `app_karr` locally, tagged `latest`, no push.
+This builds image `app_karr` locally, tagged `latest 0.001 0`, no push.
+
+**Note:** `target` is only required for multi-target Dockerfiles. Omit it for single-target builds.
 
 ## Included Plugins
 
