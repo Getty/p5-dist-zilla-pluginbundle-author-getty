@@ -1,5 +1,6 @@
 package Dist::Zilla::PluginBundle::Author::GETTY::Docker;
 # ABSTRACT: Docker subsection for @Author::GETTY
+
 use Moose;
 
 # Attributes that subsections can set
