@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.309     2026-05-16 01:58:24Z
 
   - Add [@Author::GETTY::Docker] subsection support for multi-target Docker builds
   - Docker subsections inherit `docker_image` (or use dist-name default), `docker_tags`, `docker_local` from bundle
