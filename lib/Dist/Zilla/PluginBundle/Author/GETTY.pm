@@ -579,6 +579,39 @@ has docker_local => (
   default => sub { $_[0]->payload->{docker_local} // 0 },
 );
 
+=head2 Docker Support
+
+The bundle supports Docker image building via L<Dist::Zilla::Plugin::Docker::API>.
+Enable by setting C<docker_image> and optionally other docker_* attributes:
+
+  [@Author::GETTY]
+  docker_image = registry/app
+  docker_build = latest %v %m
+  docker_release = %v %m
+  docker_local = 0
+
+For multi-target Dockerfiles (e.g., separate runtime-root and runtime-user targets),
+use C<[@Author::GETTY::Docker]> subsections:
+
+  [@Author::GETTY]
+  docker_image = registry/app
+  docker_build = latest %v %m
+
+  [@Author::GETTY::Docker / runtime-root]
+  target = runtime-root
+
+  [@Author::GETTY::Docker / runtime-user]
+  target = runtime-user
+  local = 1
+  tags = user
+
+Each C<[@Author::GETTY::Docker / name]> subsection creates an independent
+Docker::API plugin. Subsections inherit from the parent bundle's C<docker_image>,
+C<docker_build>, and C<docker_local> settings, but can override C<target>,
+C<tags>, C<image>, and C<local>.
+
+=cut
+
 my @gather_array_options = qw( exclude_filename exclude_match );
 my @gather_array_attributes = map { 'gather_'.$_ } @gather_array_options;
 

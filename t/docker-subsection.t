@@ -41,7 +41,7 @@ copyright_holder = Test
 [@Author::GETTY]
 docker_image = myregistry/myapp
 
-[@Author::GETTY::Docker]
+[@Author::GETTY::Docker / runtime-root]
 target = runtime-root
 CONF
 
@@ -65,7 +65,7 @@ copyright_holder = Test
 docker_image = myregistry/myapp
 docker_tags = latest %v
 
-[@Author::GETTY::Docker]
+[@Author::GETTY::Docker / runtime-root]
 target = runtime-root
 CONF
 
@@ -89,7 +89,7 @@ copyright_holder = Test
 docker_image = myregistry/myapp
 docker_tags = latest %v
 
-[@Author::GETTY::Docker]
+[@Author::GETTY::Docker / runtime-root]
 target = runtime-root
 tags = user %v
 CONF
@@ -111,7 +111,7 @@ copyright_holder = Test
 
 [@Author::GETTY]
 
-[@Author::GETTY::Docker]
+[@Author::GETTY::Docker / runtime-root]
 target = runtime-root
 CONF
 
@@ -134,7 +134,7 @@ copyright_holder = Test
 [@Author::GETTY]
 docker_image = myregistry/myapp
 
-[@Author::GETTY::Docker]
+[@Author::GETTY::Docker / runtime-root]
 image = other-registry/otherapp
 target = runtime-root
 CONF
@@ -156,11 +156,11 @@ copyright_holder = Test
 [@Author::GETTY]
 docker_image = myregistry/myapp
 
-[@Author::GETTY::Docker]
+[@Author::GETTY::Docker / runtime-root]
 target = runtime-root
 tags = latest %v
 
-[@Author::GETTY::Docker]
+[@Author::GETTY::Docker / runtime-user]
 target = runtime-user
 tags = user
 local = 1
@@ -188,10 +188,10 @@ copyright_holder = Test
 
 [@Author::GETTY]
 
-[@Author::GETTY::Docker]
+[@Author::GETTY::Docker / runtime-root]
 target = runtime-root
 
-[@Author::GETTY::Docker]
+[@Author::GETTY::Docker / runtime-user]
 target = runtime-user
 CONF
 
