@@ -33,8 +33,7 @@ sub configure {
 
   my %plugin_args = (
     image        => $image,
-    build_tag    => $tags,
-    release_tag  => $tags,
+    tag          => $tags,
     build_load   => 1,
     release_push => $local ? 0 : 1,
   );

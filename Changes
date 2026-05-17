@@ -12,6 +12,9 @@
   - Subsection without image in either subsection or parent now dies with a
     clear error message instead of silently falling back to dist-name
   - Add comprehensive test suite for all subsection-inheritance scenarios
+  - [@Author::GETTY::Docker] now passes the single canonical `tag` attribute
+    to Docker::API instead of the deprecated build_tag / release_tag pair;
+    requires Docker::API 0.004
 
 0.309     2026-05-16 01:58:24Z
 

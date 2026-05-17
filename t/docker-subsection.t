@@ -73,7 +73,7 @@ CONF
   my @docker_plugins = grep { $_->plugin_name =~ /Docker::API/ } @{$tzil->plugins};
 
   is(scalar(@docker_plugins), 1, "one Docker::API plugin created");
-  my @build_tags = @{$docker_plugins[0]->build_tag};
+  my @build_tags = @{$docker_plugins[0]->tag};
   is_deeply(\@build_tags, ['latest', '%v'], "tags inherited from bundle docker_tags");
 }
 
@@ -97,7 +97,7 @@ CONF
   my $tzil = build_dist($config);
   my @docker_plugins = grep { $_->plugin_name =~ /Docker::API/ } @{$tzil->plugins};
 
-  my @build_tags = @{$docker_plugins[0]->build_tag};
+  my @build_tags = @{$docker_plugins[0]->tag};
   is_deeply(\@build_tags, ['user', '%v'], "tags overridden by subsection");
 }
 
