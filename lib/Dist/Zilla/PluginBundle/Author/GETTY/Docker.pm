@@ -42,7 +42,7 @@ sub configure {
   $plugin_args{_network_mode} = $payload->{network_mode} if defined $payload->{network_mode};
 
   for my $k (qw(
-    dockerfile context build_arg label platform release_load
+    dockerfile build_arg label platform release_load
     pull no_cache rm force_rm fail_if_tag_exists skip_latest_on_trial
   )) {
     $plugin_args{$k} = $payload->{$k} if exists $payload->{$k};
