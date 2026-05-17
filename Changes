@@ -1,3 +1,5 @@
+{{$NEXT}}
+
 0.311     2026-05-17 02:29:04Z
 
   - Add [GitHub::CreateRelease] by default when GitHub integration is active
