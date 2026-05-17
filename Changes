@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+  - Add [GitHub::CreateRelease] by default when GitHub integration is active
+    (i.e. no_github is not set); reads release notes from Changes file
+  - New no_github_release option to opt out without disabling all GitHub integration
+
 0.310     2026-05-17 01:37:28Z
 
   - Rewrite [@Author::GETTY::Docker] from a non-functional stub into a real

@@ -92,6 +92,11 @@ In default configuration it is equivalent to:
   [@Git::VersionManager]
   ; handles versioning, changelog (NextRelease), commits, tags, and push
 
+  [GitHub::CreateRelease]
+  branch     = main
+  notes_from = ChangeLog
+  ; notes_file defaults to "Changes" when notes_from = ChangeLog
+
 If the C<task> argument is given to the bundle, PodWeaver is replaced with
 TaskWeaver and AutoVersion is used for versioning (instead of
 @Git::VersionManager). You can also give a bigger major version with C<version>:
@@ -175,7 +180,20 @@ L<Dist::Zilla::Plugin::PodWeaver>.
 =head2 no_github
 
 If set to 1, this attribute will disable L<Dist::Zilla::Plugin::GithubMeta> and
-will add L<Dist::Zilla::Plugin::Repository> instead.
+will add L<Dist::Zilla::Plugin::Repository> instead. It also disables
+L<Dist::Zilla::Plugin::GitHub::CreateRelease>.
+
+=head2 no_github_release
+
+If set to 1, L<Dist::Zilla::Plugin::GitHub::CreateRelease> will not be used
+even though GitHub integration is otherwise active.
+
+When this option is B<not> set (the default), C<dzil release> will create a
+GitHub Release for the new tag and attach the CPAN tarball. This requires a
+F<~/.github-identity> file in your home directory with C<login> and C<token>
+fields; the token needs write access to the repository's Contents. See
+L<Config::Identity::GitHub> for authentication details (including GPG-encrypted
+identity files).
 
 =head2 no_cpan
 
@@ -335,6 +353,8 @@ L<Dist::Zilla::PluginBundle::Git::VersionManager>
 
 L<Dist::Zilla::Plugin::Git::CheckFor::CorrectBranch>
 
+L<Dist::Zilla::Plugin::GitHub::CreateRelease>
+
 L<Dist::Zilla::Plugin::GithubMeta>
 
 L<Dist::Zilla::Plugin::InstallRelease>
@@ -422,6 +442,13 @@ has no_github => (
   isa     => 'Bool',
   lazy    => 1,
   default => sub { $_[0]->payload->{no_github} },
+);
+
+has no_github_release => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub { $_[0]->payload->{no_github_release} },
 );
 
 has no_cpan => (
@@ -870,6 +897,15 @@ sub configure {
       tag_format => '%v',
       push_to    => [ qw(origin) ],
     });
+  }
+
+  unless ($self->no_github || $self->no_github_release) {
+    $self->add_plugins([
+      'GitHub::CreateRelease' => {
+        branch     => $self->release_branch,
+        notes_from => 'ChangeLog',
+      }
+    ]);
   }
 
   # Docker support is delivered exclusively via [@Author::GETTY::Docker / name]
