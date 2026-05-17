@@ -2,11 +2,13 @@ use strict;
 use warnings;
 use Test::More;
 use Dist::Zilla::Tester;
+use Dist::Zilla::Chrome::Term;
 use Path::Tiny;
 use File::Temp qw(tempdir);
 use Carp qw(croak);
 
-plan skip_all => "dzil not available" unless eval { require 'Dist::Zilla'; 1 };
+plan skip_all => "Dist::Zilla::Tester not available"
+  unless eval { require Dist::Zilla::Tester; require Dist::Zilla::Chrome::Term; 1 };
 
 sub build_dist {
   my ($dzil_config, %opts) = @_;
@@ -18,14 +20,12 @@ sub build_dist {
   $dist_dir->child('lib', 'Foo.pm')->parent->mkpath;
   $dist_dir->child('lib', 'Foo.pm')->spew("package Foo;\n1;\n");
 
-  my $tzil = Dist::Zilla::Tester->new({
-    tempdir => $tempdir,
-    config => { },
-    files => [
-      { path => 'dist.ini', content => $dzil_config },
-      { path => 'lib/Foo.pm', content => "package Foo;\n1;\n" },
-    ],
-  })->build;
+  my $tzil = Dist::Zilla::Tester->from_config({
+    dist_root => "$dist_dir",
+  }, {
+    tempdir_root => $tempdir,
+    chrome => Dist::Zilla::Chrome::Term->new,
+  });
 
   return $tzil;
 }
@@ -46,7 +46,7 @@ target = runtime-root
 CONF
 
   my $tzil = build_dist($config);
-  my @docker_plugins = grep { $_->plugin_name =~ /Docker::API/ } @{$tzil->zilla->plugins};
+  my @docker_plugins = grep { $_->plugin_name =~ /Docker::API/ } @{$tzil->plugins};
 
   is(scalar(@docker_plugins), 1, "one Docker::API plugin created from subsection");
   is($docker_plugins[0]->image, 'myregistry/myapp', "image inherited from bundle docker_image");
@@ -70,7 +70,7 @@ target = runtime-root
 CONF
 
   my $tzil = build_dist($config);
-  my @docker_plugins = grep { $_->plugin_name =~ /Docker::API/ } @{$tzil->zilla->plugins};
+  my @docker_plugins = grep { $_->plugin_name =~ /Docker::API/ } @{$tzil->plugins};
 
   is(scalar(@docker_plugins), 1, "one Docker::API plugin created");
   my @build_tags = @{$docker_plugins[0]->build_tag};
@@ -95,13 +95,13 @@ tags = user %v
 CONF
 
   my $tzil = build_dist($config);
-  my @docker_plugins = grep { $_->plugin_name =~ /Docker::API/ } @{$tzil->zilla->plugins};
+  my @docker_plugins = grep { $_->plugin_name =~ /Docker::API/ } @{$tzil->plugins};
 
   my @build_tags = @{$docker_plugins[0]->build_tag};
   is_deeply(\@build_tags, ['user', '%v'], "tags overridden by subsection");
 }
 
-# Test 4: local=1 forced when no explicit docker_image and no bundle docker_image
+# Test 4: Subsection without image (neither in subsection nor in parent) must croak
 {
   my $config = <<'CONF';
 name = Test-Dist
@@ -115,12 +115,13 @@ copyright_holder = Test
 target = runtime-root
 CONF
 
-  my $tzil = build_dist($config);
-  my @docker_plugins = grep { $_->plugin_name =~ /Docker::API/ } @{$tzil->zilla->plugins};
-
-  is(scalar(@docker_plugins), 1, "one Docker::API plugin created");
-  is($docker_plugins[0]->image, 'test_dist', "image defaults to dist-name");
-  ok(!$docker_plugins[0]->release_push, "release_push=0 when local=1 forced for default image");
+  my $err;
+  eval { build_dist($config); 1 } or $err = $@;
+  like(
+    $err // '',
+    qr/needs either `image = \.\.\.` in this subsection or `docker_image = \.\.\.`/,
+    "subsection without image and no parent docker_image is fatal",
+  );
 }
 
 # Test 5: Explicit image in subsection
@@ -140,7 +141,7 @@ target = runtime-root
 CONF
 
   my $tzil = build_dist($config);
-  my @docker_plugins = grep { $_->plugin_name =~ /Docker::API/ } @{$tzil->zilla->plugins};
+  my @docker_plugins = grep { $_->plugin_name =~ /Docker::API/ } @{$tzil->plugins};
 
   is($docker_plugins[0]->image, 'other-registry/otherapp', "image from subsection, not bundle");
 }
@@ -167,7 +168,7 @@ local = 1
 CONF
 
   my $tzil = build_dist($config);
-  my @docker_plugins = grep { $_->plugin_name =~ /Docker::API/ } @{$tzil->zilla->plugins};
+  my @docker_plugins = grep { $_->plugin_name =~ /Docker::API/ } @{$tzil->plugins};
 
   is(scalar(@docker_plugins), 2, "two Docker::API plugins created from subsections");
 
@@ -178,7 +179,7 @@ CONF
   is($sorted[1]->image, 'myregistry/myapp', "second plugin inherits bundle image");
 }
 
-# Test 7: Error on duplicate subsection without explicit image
+# Test 7: Subsections without image AND no parent docker_image must croak
 {
   my $config = <<'CONF';
 name = Test-Dist
@@ -195,11 +196,13 @@ target = runtime-root
 target = runtime-user
 CONF
 
-  my $tzil = build_dist($config);
-  my @docker_plugins = grep { $_->plugin_name =~ /Docker::API/ } @{$tzil->zilla->plugins};
-
-  # Should create only one plugin because second one without explicit image is rejected
-  is(scalar(@docker_plugins), 1, "only one Docker::API plugin when second subsection has no image");
+  my $err;
+  eval { build_dist($config); 1 } or $err = $@;
+  like(
+    $err // '',
+    qr/needs either `image = \.\.\.` in this subsection or `docker_image = \.\.\.`/,
+    "two image-less subsections also fail with the same message",
+  );
 }
 
 done_testing;

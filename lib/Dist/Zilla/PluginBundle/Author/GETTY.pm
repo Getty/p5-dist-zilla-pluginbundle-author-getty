@@ -5,17 +5,21 @@ use Moose;
 use Dist::Zilla;
 with 'Dist::Zilla::Role::PluginBundle::Easy';
 
+# Defaults published for any [@Author::GETTY::Docker / ...] subsections that
+# appear after [@Author::GETTY] in dist.ini. The subsection bundle reads from
+# here when no explicit value is set on the subsection itself.
+our %DOCKER_DEFAULTS;
+
 sub bundle_config {
   my ($class, $section) = @_;
 
-  # Capture zilla before creating the instance
-  my $zilla;
-  if (ref($section) ne 'HASH' && $section->can('assembler')) {
-    $zilla = $section->assembler->zilla;
-  }
-
   my $self = $class->new($section);
-  $self->{_zilla} = $zilla if $zilla;
+
+  %DOCKER_DEFAULTS = (
+    image => $self->payload->{docker_image},
+    tags  => $self->payload->{docker_tags},
+    local => $self->payload->{docker_local},
+  );
 
   $self->configure;
 
@@ -551,64 +555,28 @@ has xs_object => (
   default => sub { $_[0]->payload->{xs_object} || '' },
 );
 
-has docker_image => (
-  is      => 'ro',
-  isa     => 'Str',
-  lazy    => 1,
-  default => sub { $_[0]->payload->{docker_image} // '' },
-);
-
-has docker_build => (
-  is      => 'ro',
-  isa     => 'Str',
-  lazy    => 1,
-  default => sub { $_[0]->payload->{docker_build} // 'latest' },
-);
-
-has docker_release => (
-  is      => 'ro',
-  isa     => 'Str',
-  lazy    => 1,
-  default => sub { $_[0]->payload->{docker_release} // '%v' },
-);
-
-has docker_local => (
-  is      => 'ro',
-  isa     => 'Bool',
-  lazy    => 1,
-  default => sub { $_[0]->payload->{docker_local} // 0 },
-);
-
 =head2 Docker Support
 
-The bundle supports Docker image building via L<Dist::Zilla::Plugin::Docker::API>.
-Enable by setting C<docker_image> and optionally other docker_* attributes:
+The bundle supports Docker image building via L<Dist::Zilla::Plugin::Docker::API>
+through C<[@Author::GETTY::Docker / name]> subsections. Each subsection produces
+one independent C<Docker::API> plugin:
 
   [@Author::GETTY]
   docker_image = registry/app
-  docker_build = latest %v %m
-  docker_release = %v %m
-  docker_local = 0
-
-For multi-target Dockerfiles (e.g., separate runtime-root and runtime-user targets),
-use C<[@Author::GETTY::Docker]> subsections:
-
-  [@Author::GETTY]
-  docker_image = registry/app
-  docker_build = latest %v %m
+  docker_tags  = latest %v
 
   [@Author::GETTY::Docker / runtime-root]
   target = runtime-root
 
   [@Author::GETTY::Docker / runtime-user]
   target = runtime-user
-  local = 1
-  tags = user
+  local  = 1
+  tags   = user
 
-Each C<[@Author::GETTY::Docker / name]> subsection creates an independent
-Docker::API plugin. Subsections inherit from the parent bundle's C<docker_image>,
-C<docker_build>, and C<docker_local> settings, but can override C<target>,
-C<tags>, C<image>, and C<local>.
+Subsections inherit C<image>, C<tags>, and C<local> from the parent's
+C<docker_image>, C<docker_tags>, and C<docker_local> settings, but each
+subsection can override them individually. See
+L<Dist::Zilla::PluginBundle::Author::GETTY::Docker> for the full attribute list.
 
 =cut
 
@@ -693,107 +661,6 @@ sub effective_gather_exclude_filename {
 
   my %seen;
   return [ grep { !$seen{$_}++ } @exclude ];
-}
-
-sub _collect_docker_subsections {
-  my ($self, $zilla) = @_;
-  return () unless $zilla && ref($zilla);  # Guard: no zilla means no subsections
-  my @subsections;
-
-  for my $plugin (@{ $zilla->plugins }) {
-    my $name = $plugin->plugin_name;
-    if ($name =~ /^Author::GETTY::Docker(?:\/|$)/) {
-      push @subsections, $plugin;
-    }
-  }
-
-  return @subsections;
-}
-
-sub _default_docker_image {
-  my ($self, $zilla) = @_;
-  my $name = $zilla->name;
-  $name =~ s/-/_/g;
-  $name = lc($name);
-  return $name;
-}
-
-sub _merge_docker_subsection_payload {
-  my ($self, $subsection_plugin, $zilla) = @_;
-
-  my %merged;
-  my $payload = $subsection_plugin->payload;
-
-  my $bundle_docker_image = $self->docker_image;
-  my $subsection_image = $payload->{image};
-
-  if ($subsection_image) {
-    $merged{image} = $subsection_image;
-  } elsif ($bundle_docker_image) {
-    $merged{image} = $bundle_docker_image;
-  } else {
-    $merged{image} = $self->_default_docker_image($zilla);
-    $merged{local} = 1;
-  }
-
-  my $bundle_tags = $self->_docker_tags_array;
-  my $subsection_tags = $payload->{tags};
-
-  if ($subsection_tags) {
-    $merged{tags} = $subsection_tags;
-  } elsif ($bundle_tags && @$bundle_tags) {
-    $merged{tags} = $bundle_tags;
-  } else {
-    $merged{tags} = ['latest', '%v', '%m'];
-  }
-
-  $merged{local} = exists $payload->{local}
-    ? $payload->{local}
-    : ($self->docker_local // 0);
-
-  for my $key (keys %$payload) {
-    next if $key =~ /^(image|tags|local)$/;
-    $merged{$key} = $payload->{$key};
-  }
-
-  return \%merged;
-}
-
-sub _docker_tags_array {
-  my ($self) = @_;
-  my $tags = $self->payload->{docker_tags};
-  return [] unless $tags;
-  return [ split /\s+/, $tags ];
-}
-
-sub _validate_docker_subsections {
-  my ($self, @subsections) = @_;
-  my $zilla = $self->{_zilla} or die "No zilla stored";
-
-  my @without_explicit_image;
-  my %images_seen;
-
-  for my $sub (@subsections) {
-    my $payload = $sub->payload;
-    my $image = $payload->{image} // $self->docker_image // $self->_default_docker_image($zilla);
-
-    if (!$payload->{image} && !$self->docker_image) {
-      push @without_explicit_image, $sub;
-    }
-
-    for my $existing (keys %images_seen) {
-      if ($image eq $existing || $image =~ /^\Q$existing\E-/ || $existing =~ /^\Q$image\E-/) {
-        $self->log_fatal("Overlapping Docker image names: '$existing' and '$image'");
-      }
-    }
-    $images_seen{$image} = 1;
-  }
-
-  if (@without_explicit_image > 1) {
-    $self->log_fatal('Only one [@Author::GETTY::Docker] subsection allowed without explicit image');
-  }
-
-  return 1;
 }
 
 sub configure {
@@ -1005,63 +872,9 @@ sub configure {
     });
   }
 
-  # Docker image support
-  my $zilla = $self->{_zilla};
-  my @docker_subsections = $self->_collect_docker_subsections($zilla);
-
-  if (@docker_subsections) {
-    $self->_validate_docker_subsections(@docker_subsections);
-
-    for my $subsection (@docker_subsections) {
-      my $config = $self->_merge_docker_subsection_payload($subsection, $zilla);
-
-      my @build_tags = ref($config->{tags}) eq 'ARRAY' ? @{$config->{tags}} : [ split /\s+/, $config->{tags} ];
-
-      my %plugin_args = (
-        image      => $config->{image},
-        build_tag  => \@build_tags,
-        release_tag => \@build_tags,
-      );
-
-      $plugin_args{local} = $config->{local} if exists $config->{local};
-
-      if ($config->{target}) {
-        $plugin_args{target} = $config->{target};
-      }
-
-      for my $key (grep { !/(image|tags|local|target)/ } keys %$config) {
-        $plugin_args{$key} = $config->{$key};
-      }
-
-      $self->add_plugins([ 'Docker::API' => \%plugin_args ]);
-    }
-  } elsif ($self->docker_image) {
-    my @build_tags = ( $self->docker_build );
-    my $release_push = 1;
-
-    if ($self->docker_local) {
-      my $local_image = 'localhost:5000/' . $self->_strip_registry($self->docker_image);
-      push @build_tags, $local_image;
-      $release_push = 0;
-    }
-
-    $self->add_plugins([
-      'Docker::API' => {
-        image         => $self->docker_image,
-        build_tag     => \@build_tags,
-        release_tag   => [ $self->docker_release ],
-        release_push  => $release_push,
-        build_load    => 1,
-      },
-    ]);
-  }
-
-  # Helper to strip registry prefix
-  sub _strip_registry {
-    my ($self, $image) = @_;
-    $image =~ s{^.*/}{};
-    return $image;
-  }
+  # Docker support is delivered exclusively via [@Author::GETTY::Docker / name]
+  # subsections. The docker_image / docker_tags / docker_local attributes on
+  # this bundle only act as defaults that subsections inherit.
 }
 
 __PACKAGE__->meta->make_immutable;

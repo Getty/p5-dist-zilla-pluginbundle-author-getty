@@ -1,11 +1,17 @@
 {{$NEXT}}
 
-  - Add [@Author::GETTY::Docker] subsection support for multi-target Docker builds
-  - Docker subsections inherit `docker_image` (or use dist-name default), `docker_tags`, `docker_local` from bundle
-  - Each subsection creates independent Docker::API instance with own target and tags
-  - Validation: no image duplication, overlapping image names error (target is optional, only needed for multi-target Dockerfiles)
-  - Default tags now include %m (major version): `latest %v %m`
-  - Default behavior when no docker_image set and no image in subsection: image=dist-name, local=1 (no push)
+  - Rewrite [@Author::GETTY::Docker] from a non-functional stub into a real
+    PluginBundle::Easy subsection bundle; each occurrence creates one Docker::API plugin
+  - Subsections inherit image, tags, and local from docker_image / docker_tags /
+    docker_local in the parent [@Author::GETTY] section; all three can be overridden
+    per subsection
+  - Remove single-image Docker path from [@Author::GETTY]: docker_image now acts
+    purely as a default for subsections, not as a standalone trigger
+  - Remove docker_build and docker_release attributes (were only used by the
+    removed single-image path)
+  - Subsection without image in either subsection or parent now dies with a
+    clear error message instead of silently falling back to dist-name
+  - Add comprehensive test suite for all subsection-inheritance scenarios
 
 0.309     2026-05-16 01:58:24Z
 
