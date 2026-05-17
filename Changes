@@ -6,19 +6,19 @@
 
 0.310     2026-05-17 01:37:28Z
 
-  - Rewrite [@Author::GETTY::Docker] from a non-functional stub into a real
+  - Rewrite Author::GETTY::Docker from a non-functional stub into a real
     PluginBundle::Easy subsection bundle; each occurrence creates one Docker::API plugin
   - Subsections inherit image, tags, and local from docker_image / docker_tags /
-    docker_local in the parent [@Author::GETTY] section; all three can be overridden
+    docker_local in the parent Author::GETTY section; all three can be overridden
     per subsection
-  - Remove single-image Docker path from [@Author::GETTY]: docker_image now acts
+  - Remove single-image Docker path from Author::GETTY: docker_image now acts
     purely as a default for subsections, not as a standalone trigger
   - Remove docker_build and docker_release attributes (were only used by the
     removed single-image path)
   - Subsection without image in either subsection or parent now dies with a
     clear error message instead of silently falling back to dist-name
   - Add comprehensive test suite for all subsection-inheritance scenarios
-  - [@Author::GETTY::Docker] now passes the single canonical `tag` attribute
+  - Author::GETTY::Docker now passes the single canonical `tag` attribute
     to Docker::API instead of the deprecated build_tag / release_tag pair;
     requires Docker::API 0.004
 
@@ -33,7 +33,7 @@
 
 0.307     2026-04-22 04:34:31Z
 
-  - Forward commit_files_after_release option to @Git::VersionManager so files
+  - Forward commit_files_after_release option to Git::VersionManager so files
     bumped in run_before_release actually land in the release commit
 
 0.306     2026-03-29 02:24:59Z
@@ -57,7 +57,7 @@
 0.303     2026-01-13 23:01:57Z
 
   - Add authority attribute to override x_authority metadata
-  - Fix Git::Push not being added after @Git::VersionManager
+  - Fix Git::Push not being added after Git::VersionManager
 
 0.302     2026-01-13 22:58:13Z
 
