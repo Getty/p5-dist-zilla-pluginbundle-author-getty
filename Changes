@@ -1,5 +1,10 @@
 {{$NEXT}}
 
+  - [@Author::GETTY::Docker]: default `tags` is now `latest %V %v`
+    (was `latest %v`), matching the new Docker::API default. A
+    subsection without an explicit `tags = ...` will push three tags
+    by default — e.g. `latest`, `0`, and `0.402` for a `0.402`
+    release.
   - [@Author::GETTY::Docker]: stop forwarding the removed `context`
     attribute to [Docker::API]; the plugin no longer accepts it.
 

@@ -25,7 +25,7 @@ sub configure {
 
   my $tags = $self->_normalize_tags($payload->{tags})
           // $self->_normalize_tags($defaults->{tags})
-          // ['latest', '%v'];
+          // ['latest', '%V', '%v'];
 
   my $local = exists $payload->{local} ? $payload->{local}
             : exists $defaults->{local} ? $defaults->{local}
@@ -102,7 +102,9 @@ Optional multi-stage Dockerfile target.
 =head2 tags
 
 Whitespace-separated list of tags to apply to both build and release. Inherited
-from the parent's C<docker_tags> when omitted. Defaults to C<latest %v>.
+from the parent's C<docker_tags> when omitted. Defaults to C<latest %V %v>
+(e.g. C<latest>, C<0>, C<0.402> for version C<0.402>). Setting C<tags>
+explicitly B<replaces> the default list; it does not append.
 
 =head2 local
 
