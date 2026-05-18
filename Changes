@@ -1,3 +1,5 @@
+{{$NEXT}}
+
 0.312     2026-05-18 19:54:12Z
 
   - [@Author::GETTY::Docker]: default `tags` is now `latest %V %v`
