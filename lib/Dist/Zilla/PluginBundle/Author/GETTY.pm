@@ -584,13 +584,25 @@ has xs_object => (
 
 =head2 Docker Support
 
-The bundle supports Docker image building via L<Dist::Zilla::Plugin::Docker::API>
-through C<[@Author::GETTY::Docker / name]> subsections. Each subsection produces
-one independent C<Docker::API> plugin:
+The bundle supports Docker image building via L<Dist::Zilla::Plugin::Docker::API>.
+The simplest form is a single image — set C<docker_image> on the bundle and a
+default Docker build/release pipeline is wired in for you:
 
   [@Author::GETTY]
   docker_image = registry/app
   docker_tags  = latest %v
+
+That alone gives you a working Releaser (no separate C<[UploadToCPAN]> needed
+for non-CPAN dists) — C<dzil build> builds the image, C<dzil release> tags
+and pushes it.
+
+For multi-target builds, add explicit C<[@Author::GETTY::Docker / name]>
+subsections — each produces one independent C<Docker::API> plugin:
+
+  [@Author::GETTY]
+  docker_image    = registry/app
+  docker_tags     = latest %v
+  docker_default  = 0    ; suppress the auto-default; subsections handle it
 
   [@Author::GETTY::Docker / runtime-root]
   target = runtime-root
@@ -604,6 +616,32 @@ Subsections inherit C<image>, C<tags>, and C<local> from the parent's
 C<docker_image>, C<docker_tags>, and C<docker_local> settings, but each
 subsection can override them individually. See
 L<Dist::Zilla::PluginBundle::Author::GETTY::Docker> for the full attribute list.
+
+=head2 docker_image
+
+Docker image repository to publish to. When set, the bundle auto-adds a
+single default L<Dist::Zilla::Plugin::Docker::API> plugin (via
+L<[@Author::GETTY::Docker]|Dist::Zilla::PluginBundle::Author::GETTY::Docker>)
+so C<dzil release> has a working Releaser without any extra config. Also
+acts as the inherited default for any explicit C<[@Author::GETTY::Docker /
+name]> subsections.
+
+=head2 docker_tags
+
+Whitespace-separated list of tags applied to the image. Default: C<latest
+%V %v>. Inherited by subsections.
+
+=head2 docker_local
+
+If true, the image is built and tagged but not pushed. Inherited by
+subsections.
+
+=head2 docker_default
+
+Defaults to true. Set to C<0> to suppress the auto-default plugin when
+C<docker_image> is set — use this when you configure your Docker builds
+exclusively through explicit C<[@Author::GETTY::Docker / name]> subsections
+and don't want an extra plugin added behind your back.
 
 =cut
 
@@ -908,9 +946,16 @@ sub configure {
     ]);
   }
 
-  # Docker support is delivered exclusively via [@Author::GETTY::Docker / name]
-  # subsections. The docker_image / docker_tags / docker_local attributes on
-  # this bundle only act as defaults that subsections inherit.
+  # Docker support: if docker_image is set on this bundle, auto-add a single
+  # default [@Author::GETTY::Docker] subsection so the dist has a working
+  # Releaser without any extra config. Users who want multiple targets via
+  # explicit [@Author::GETTY::Docker / name] subsections can opt out with
+  # docker_default = 0 to suppress the auto-default.
+  if (defined $self->payload->{docker_image}
+      && length $self->payload->{docker_image}
+      && ($self->payload->{docker_default} // 1)) {
+    $self->add_bundle('@Author::GETTY::Docker' => {});
+  }
 }
 
 __PACKAGE__->meta->make_immutable;

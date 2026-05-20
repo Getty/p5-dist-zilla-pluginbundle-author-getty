@@ -1,5 +1,14 @@
 {{$NEXT}}
 
+  - [@Author::GETTY]: docker_image now auto-adds a single default
+    [@Author::GETTY::Docker] subsection so dists without an explicit
+    Docker subsection still get a working Releaser. Set
+    docker_default = 0 to suppress this when configuring Docker
+    builds exclusively through explicit subsections.
+  - [@Author::GETTY::Docker]: forward the new build_verbose option
+    to [Docker::API]. Default off — the build log shows only step
+    headers, not the full per-command output.
+
 0.312     2026-05-18 19:54:12Z
 
   - [@Author::GETTY::Docker]: default `tags` is now `latest %V %v`
