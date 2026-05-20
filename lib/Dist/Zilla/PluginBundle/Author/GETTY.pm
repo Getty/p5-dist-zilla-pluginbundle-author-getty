@@ -183,10 +183,18 @@ If set to 1, this attribute will disable L<Dist::Zilla::Plugin::GithubMeta> and
 will add L<Dist::Zilla::Plugin::Repository> instead. It also disables
 L<Dist::Zilla::Plugin::GitHub::CreateRelease>.
 
+When unset, the bundle auto-detects whether the repository has a remote
+pointing at C<github.com> (by scanning F<.git/config>). If no GitHub remote is
+found — e.g. the dist lives on GitLab, Codeberg, a private Gitea, or has no
+remote at all — C<no_github> defaults to 1 so that the GitHub-specific plugins
+are skipped entirely. Set C<no_github = 0> explicitly to force GitHub plugins
+on even without a detected remote.
+
 =head2 no_github_release
 
 If set to 1, L<Dist::Zilla::Plugin::GitHub::CreateRelease> will not be used
-even though GitHub integration is otherwise active.
+even though GitHub integration is otherwise active. Like L</no_github>, this
+defaults to 1 when no GitHub remote is detected in F<.git/config>.
 
 When this option is B<not> set (the default), C<dzil release> will create a
 GitHub Release for the new tag and attach the CPAN tarball. This requires a
@@ -474,14 +482,45 @@ has no_github => (
   is      => 'ro',
   isa     => 'Bool',
   lazy    => 1,
-  default => sub { $_[0]->payload->{no_github} },
+  default => sub {
+    my $self = shift;
+    return $self->payload->{no_github} if defined $self->payload->{no_github};
+    return $self->_has_github_remote ? 0 : 1;
+  },
 );
 
 has no_github_release => (
   is      => 'ro',
   isa     => 'Bool',
   lazy    => 1,
-  default => sub { $_[0]->payload->{no_github_release} },
+  default => sub {
+    my $self = shift;
+    return $self->payload->{no_github_release} if defined $self->payload->{no_github_release};
+    return $self->_has_github_remote ? 0 : 1;
+  },
+);
+
+# Look at .git/config (relative to the cwd, which dzil sets to the dist root)
+# and return true if any remote URL points at github.com. Used to auto-disable
+# the GitHub-specific plugins when the dist lives somewhere else (GitLab,
+# Codeberg, a private Gitea, no remote at all, ...).
+has _has_github_remote => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub {
+    my $config = '.git/config';
+    return 0 unless -e $config;
+    open my $fh, '<', $config or return 0;
+    while (my $line = <$fh>) {
+      if ($line =~ m{^\s*url\s*=.*\bgithub\.com\b}i) {
+        close $fh;
+        return 1;
+      }
+    }
+    close $fh;
+    return 0;
+  },
 );
 
 has no_cpan => (
