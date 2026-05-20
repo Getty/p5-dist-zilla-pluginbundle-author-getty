@@ -1,5 +1,10 @@
 {{$NEXT}}
 
+  - [@Author::GETTY]: new version_finder option restricts which files
+    get a $VERSION rewrite. Forwards to PkgVersion (task/manual_version
+    path) and to RewriteVersion::Transitional / BumpVersionAfterRelease
+    via @Git::VersionManager. Typical use: `version_finder = :MainModule`
+    to bump only the main module instead of every .pm in lib/.
   - [@Author::GETTY]: docker_image now auto-adds a single default
     [@Author::GETTY::Docker] subsection so dists without an explicit
     Docker subsection still get a working Releaser. Set

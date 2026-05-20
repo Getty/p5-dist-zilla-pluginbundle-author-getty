@@ -341,6 +341,39 @@ to override:
 Override the XS object name when using B<xs_alien>. By default, the object
 name is derived from the Alien module name (the last component after C<::>).
 
+=head2 version_finder
+
+Restrict which files get a C<$VERSION> rewrite. Multi-value; accepts any
+file finder name understood by the underlying version plugins (e.g.
+C<:MainModule>, C<:InstallModules>, C<:ExecFiles>, or a custom
+L<FileFinder|Dist::Zilla::Role::FileFinderUser/default_finders>).
+
+By default this is unset and the version plugins use their own defaults
+(C<:InstallModules> and C<:ExecFiles>). When you set it, the value is
+forwarded to:
+
+=over 4
+
+=item *
+
+L<Dist::Zilla::Plugin::PkgVersion> (used when B<task> or B<manual_version>
+is set)
+
+=item *
+
+L<Dist::Zilla::Plugin::RewriteVersion::Transitional> and
+L<Dist::Zilla::Plugin::BumpVersionAfterRelease> (used via
+L<@Git::VersionManager|Dist::Zilla::PluginBundle::Git::VersionManager> on
+the default release path)
+
+=back
+
+Typical use is restricting the rewrite to the main module so sibling
+F<.pm> files in F<lib/> are not touched:
+
+  [@Author::GETTY]
+  version_finder = :MainModule
+
 =head1 SEE ALSO
 
 L<Dist::Zilla::Plugin::Alien>
@@ -582,6 +615,13 @@ has xs_object => (
   default => sub { $_[0]->payload->{xs_object} || '' },
 );
 
+has version_finder => (
+  is      => 'ro',
+  isa     => 'ArrayRef[Str]',
+  lazy    => 1,
+  default => sub { defined $_[0]->payload->{version_finder} ? $_[0]->payload->{version_finder} : [] },
+);
+
 =head2 Docker Support
 
 The bundle supports Docker image building via L<Dist::Zilla::Plugin::Docker::API>.
@@ -716,7 +756,7 @@ has alien_bin_requires => (
   default => sub { defined $_[0]->payload->{alien_bin_requires} ? $_[0]->payload->{alien_bin_requires} : [] },
 );
 
-sub mvp_multivalue_args { @run_attributes, @gather_array_attributes, 'alien_bin_requires', @alien_array_attributes, 'commit_files_after_release' }
+sub mvp_multivalue_args { @run_attributes, @gather_array_attributes, 'alien_bin_requires', @alien_array_attributes, 'commit_files_after_release', 'version_finder' }
 
 sub effective_gather_exclude_filename {
   my ($self) = @_;
@@ -824,7 +864,11 @@ sub configure {
 
   # PkgVersion only when NOT using @Git::VersionManager (which uses RewriteVersion)
   if ($self->is_task || $self->manual_version) {
-    $self->add_plugins('PkgVersion');
+    $self->add_plugins(
+      @{ $self->version_finder }
+        ? [ 'PkgVersion' => { finder => $self->version_finder } ]
+        : 'PkgVersion'
+    );
   }
 
   $self->add_plugins(qw(
@@ -926,6 +970,10 @@ sub configure {
       'Git::Tag.tag_format' => '%v',
       $self->no_changes ? ( 'NextRelease.format' => '' ) : (),
       @{ $self->commit_files_after_release } ? ( commit_files_after_release => $self->commit_files_after_release ) : (),
+      @{ $self->version_finder } ? (
+        'RewriteVersion::Transitional.finder' => $self->version_finder,
+        'BumpVersionAfterRelease.finder'      => $self->version_finder,
+      ) : (),
     });
     $self->add_plugins([
       'Git::Push' => { push_to => 'origin' }
