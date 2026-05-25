@@ -69,6 +69,10 @@ In default configuration it is equivalent to:
   [PkgVersion]
   [MetaConfig]
   [MetaJSON]
+  [MetaProvides::Package]
+  inherit_version = 1
+  inherit_missing = 1
+  meta_noindex    = 1
   [PodSyntaxTests]
   [GithubMeta]
 
@@ -403,6 +407,8 @@ L<Dist::Zilla::Plugin::InstallRelease>
 L<Dist::Zilla::Plugin::MakeMaker::Awesome>
 
 L<Dist::Zilla::Plugin::MakeMaker::SkipInstall>
+
+L<Dist::Zilla::Plugin::MetaProvides::Package>
 
 L<Dist::Zilla::Plugin::PodWeaver>
 
@@ -916,6 +922,14 @@ sub configure {
     PodSyntaxTests
     Test::ChangesHasContent
   ));
+
+  $self->add_plugins([
+    'MetaProvides::Package' => {
+      inherit_version => 1,
+      inherit_missing => 1,
+      meta_noindex    => 1,
+    }
+  ]);
 
   $self->add_plugins($self->no_github ? 'Repository' : [ 'GithubMeta' => { issues => 1 } ]);
 

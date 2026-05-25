@@ -10,6 +10,7 @@ requires 'Dist::Zilla::Plugin::GitHub::CreateRelease', '0.0008';
 requires 'Dist::Zilla::Plugin::GithubMeta', '0.58';
 requires 'Dist::Zilla::Plugin::InstallRelease', '0.008';
 requires 'Dist::Zilla::Plugin::MakeMaker::Awesome', '0.49';
+requires 'Dist::Zilla::Plugin::MetaProvides::Package', '2.004003';
 requires 'Dist::Zilla::Plugin::MakeMaker::SkipInstall', '1.201';
 requires 'Dist::Zilla::Plugin::ModuleBuildTiny', '0.020';
 requires 'Dist::Zilla::Plugin::PodWeaver', '4.010';
