@@ -842,6 +842,10 @@ sub configure {
     -remove => [@removes],
   });
 
+  if ($self->no_install) {
+    $self->add_plugins('MakeMaker::SkipInstall');
+  }
+
   if ($self->xs) {
     $self->add_plugins(qw(
       ModuleBuildTiny

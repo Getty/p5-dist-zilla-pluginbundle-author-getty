@@ -1,5 +1,13 @@
 {{$NEXT}}
 
+  - Add Dist::Zilla::Plugin::Test::ChangesHasContent to cpanfile; the
+    bundle has been adding [Test::ChangesHasContent] but the prereq was
+    missing.
+  - [@Author::GETTY]: no_install works again. The wiring that adds
+    [MakeMaker::SkipInstall] was accidentally dropped in the Dec 2014
+    Git::GatherDir refactor (acc5f0e), while the option, its docs and the
+    no_makemaker conflict check were all left in place.
+
 0.313     2026-05-26 13:32:34Z
 
   - [@Author::GETTY]: new version_finder option restricts which files

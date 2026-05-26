@@ -19,6 +19,7 @@ requires 'Dist::Zilla::Plugin::Prereqs::FromCPANfile', '0.08';
 requires 'Dist::Zilla::Plugin::Repository', '0.25';
 requires 'Dist::Zilla::Plugin::Run', '0.050';
 requires 'Dist::Zilla::Plugin::TaskWeaver', '0.101629';
+requires 'Dist::Zilla::Plugin::Test::ChangesHasContent', '0.011';
 requires 'Dist::Zilla::PluginBundle::Git', '2.052';
 requires 'Dist::Zilla::PluginBundle::Git::VersionManager', '0.007';
 requires 'Pod::Elemental', '0.103006';
