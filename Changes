@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.314     2026-05-26 15:49:39Z
 
   - Add Dist::Zilla::Plugin::Test::ChangesHasContent to cpanfile; the
     bundle has been adding [Test::ChangesHasContent] but the prereq was
