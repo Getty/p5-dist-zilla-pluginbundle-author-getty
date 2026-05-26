@@ -1,3 +1,5 @@
+{{$NEXT}}
+
 0.313     2026-05-26 13:32:34Z
 
   - [@Author::GETTY]: new version_finder option restricts which files
