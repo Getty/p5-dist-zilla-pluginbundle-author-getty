@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.313     2026-05-26 13:32:34Z
 
   - [@Author::GETTY]: new version_finder option restricts which files
     get a $VERSION rewrite. Forwards to PkgVersion (task/manual_version
