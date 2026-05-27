@@ -1,4 +1,5 @@
 
+requires 'Alien::Build', '1.00';
 requires 'App::cpanminus', '1.7049';
 requires 'Dist::Zilla', '6.037';
 requires 'Dist::Zilla::Plugin::Alien', '0.024';
