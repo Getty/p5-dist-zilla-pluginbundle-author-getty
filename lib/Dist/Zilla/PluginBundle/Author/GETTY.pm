@@ -386,6 +386,120 @@ F<.pm> files in F<lib/> are not touched:
   [@Author::GETTY]
   version_finder = :MainModule
 
+=head1 CONTINUOUS INTEGRATION
+
+Every distribution using C<[@Author::GETTY]> can share the same CI mechanics
+via a composite GitHub Action hosted in this bundle's repository:
+
+  Getty/p5-dist-zilla-pluginbundle-author-getty/.github/actions/dzil-test
+
+The action installs L<Dist::Zilla>, bootstraps all C<dist.ini> plugins via
+C<dzil authordeps>, and then installs distribution prerequisites with
+C<dzil listdeps --author>.  The C<--author> flag is essential: it includes
+C<develop>-phase prerequisites such as L<Test::Pod>, which
+L<Dist::Zilla::Plugin::PodSyntaxTests> (always active in this bundle) registers
+as a C<develop requires>.  Without it, author tests will fail with a missing
+module — do B<not> paper over this by adding C<Test::Pod> to the cpanfile's
+C<on test> block.
+
+=head2 Pure-Perl distributions
+
+A minimal workflow for a pure-Perl dist (no system libraries required):
+
+  # .github/workflows/ci.yml
+  name: ci
+  on:
+    push:
+      branches: ['*']
+      tags-ignore: ['*']
+    pull_request:
+  jobs:
+    test:
+      runs-on: ubuntu-latest
+      strategy:
+        fail-fast: false
+        matrix:
+          perl-version: ['5.36', '5.38', '5.40']
+      container:
+        image: perl:${{ matrix.perl-version }}-bookworm
+      steps:
+        - uses: actions/checkout@v4
+        - name: Fix safe.directory
+          run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        - name: perl -V
+          run: perl -V
+        - uses: Getty/p5-dist-zilla-pluginbundle-author-getty/.github/actions/dzil-test@main
+
+=head2 Alien / XS distributions (system libraries)
+
+When the distribution wraps a C library, add system-library installation
+before the shared action, and a second job that forces a vendored build:
+
+  jobs:
+    system-lib:
+      runs-on: ubuntu-latest
+      container:
+        image: perl:5.40-bookworm
+      steps:
+        - uses: actions/checkout@v4
+        - name: Fix safe.directory
+          run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        - run: apt-get update && apt-get install -y libfoo-dev pkg-config
+        - uses: Getty/p5-dist-zilla-pluginbundle-author-getty/.github/actions/dzil-test@main
+
+    share-build:
+      runs-on: ubuntu-latest
+      container:
+        image: perl:5.40-bookworm
+      steps:
+        - uses: actions/checkout@v4
+        - name: Fix safe.directory
+          run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        - run: apt-get update && apt-get install -y cmake build-essential
+        - uses: Getty/p5-dist-zilla-pluginbundle-author-getty/.github/actions/dzil-test@main
+          with:
+            install-type: share
+
+The C<install-type: share> input sets C<ALIEN_INSTALL_TYPE=share>, which forces
+the dist to build and vendor the C library instead of using a system-provided one.
+
+=head2 Forgejo / self-hosted Gitea
+
+The composite action is forge-neutral (plain shell + cpanm + dzil).  On a
+Forgejo instance, reference it with a fully-qualified URL so the action is
+always fetched from GitHub regardless of the instance's
+C<DEFAULT_ACTIONS_URL> setting:
+
+  - uses: https://github.com/Getty/p5-dist-zilla-pluginbundle-author-getty/.github/actions/dzil-test@main
+
+Alternatively, set C<DEFAULT_ACTIONS_URL = https://github.com> in the
+Forgejo C<app.ini> and use the short form as on GitHub.
+
+Forgejo reads workflow files from F<.github/workflows/> as well as
+F<.forgejo/workflows/>, so the same YAML file works on both forges.
+
+To verify that your Forgejo instance resolves the composite action correctly,
+push a minimal probe workflow and watch the job log:
+
+  # .forgejo/workflows/probe.yml
+  name: probe
+  on: [push]
+  jobs:
+    probe:
+      runs-on: ubuntu-latest
+      container:
+        image: perl:5.40-bookworm
+      steps:
+        - uses: https://github.com/actions/checkout@v4
+        - uses: https://github.com/Getty/p5-dist-zilla-pluginbundle-author-getty/.github/actions/dzil-test@main
+
+If the action step fails to resolve (Forgejo does not yet support cross-repo
+composite actions via subdirectory paths in all configurations), the fallback
+is to vendor a copy of F<.github/actions/dzil-test/action.yml> directly into
+each distribution repository and reference it locally:
+
+  - uses: ./.github/actions/dzil-test
+
 =head1 SEE ALSO
 
 L<Dist::Zilla::Plugin::Alien>
