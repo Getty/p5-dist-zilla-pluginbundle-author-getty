@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.316     2026-06-19 14:52:42Z
 
   - Add Gitea/Forgejo repository metadata support via the new
     Dist::Zilla::Plugin::Author::GETTY::GiteaMeta (the Gitea/Forgejo counterpart
