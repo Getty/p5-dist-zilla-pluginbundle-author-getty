@@ -3,7 +3,7 @@ package Dist::Zilla::Plugin::Author::GETTY::GiteaMeta;
 use Moose;
 with 'Dist::Zilla::Role::MetaProvider';
 
-our $VERSION = '0.316';
+our $VERSION = '0.317';
 
 =head1 DESCRIPTION
 
