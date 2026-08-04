@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.317     2026-08-04 22:16:54Z
 
   - Add "tag_format" bundle option, forwarded to Git::Tag.tag_format (or the
     @Git bundle for task/manual_version dists). Defaults to "%v" as before;
