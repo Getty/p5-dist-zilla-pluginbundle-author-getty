@@ -120,6 +120,29 @@ After `dzil release` runs:
 
 **Do NOT bump the version manually before a release** — `dzil release` handles this automatically.
 
+### Every file carries its own `$VERSION`
+
+**Each file under `lib/` and `bin/` needs its own `our $VERSION = '...';`**, set to
+the version that will be released NEXT — one higher than what is on CPAN (or
+higher). A file without a `$VERSION` ships versionless and breaks consumers that
+pin against it.
+
+**Only the FIRST `our $VERSION` in a file gets rewritten.** RewriteVersion::Transitional
+and BumpVersionAfterRelease both stop after the first match, so a file holding two
+packages leaves the second one frozen at whatever version it was written with —
+while MetaProvides::Update happily reports the real release version. The result is
+a distribution whose META and whose code disagree, silently, for as many releases
+as it takes someone to notice.
+
+So: **one package per file.** If you find several `package` statements in one file,
+split them out before releasing.
+
+**Executables belong in `bin/`, never `script/`.** The bundle sets no `ExecDir`, so
+Dist::Zilla's default of `bin` applies: files under `script/` are not installed as
+executables and their `$VERSION` is never rewritten. A distribution with a `script/`
+directory should have it renamed to `bin/` — otherwise none of the above takes
+effect.
+
 ## Release Workflow
 
 ```bash
