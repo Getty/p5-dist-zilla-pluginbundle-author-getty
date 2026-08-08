@@ -28,6 +28,15 @@ copyright_holder = Copyright Owner
 - `xs` - Use ModuleBuildTiny (for pure-Perl XS without Alien deps)
 - `deprecated` - Add Deprecated plugin
 - `adoptme` - Add x_adoptme metadata
+- `no_github` - Skip GithubMeta and GitHub::CreateRelease, use Repository instead. Auto-set to 1 when `.git/config` has no github.com remote; set `no_github = 0` to force GitHub plugins on anyway
+- `no_github_release` - Skip only GitHub::CreateRelease. Same auto-detection; when active, `dzil release` creates a GitHub Release and attaches the tarball, which needs `~/.github-identity` (login + token)
+- `gitea` - Treat the remote host as Gitea/Forgejo (repository/bugtracker/homepage via GiteaMeta). Only needed for self-hosted instances — codeberg.org and the author's own are auto-detected. No effect when a GitHub remote exists
+- `include_readme` - Ship README.md (excluded from the tarball by default)
+- `no_install` - Resulting distribution can't be installed
+
+### Identity & Metadata
+- `author` - CPAN author name used for the authority
+- `authority` - Override the authority, e.g. `authority = ETHER` when uploading modules owned by another author (default: the `author` value)
 
 ### XS with Alien
 - `xs_alien = Alien::Foo` - Auto-configures MakeMaker::Awesome for XS+Alien
@@ -39,6 +48,16 @@ copyright_holder = Copyright Owner
 - `major_version = 2` - Major version for AutoVersion
 - `version_finder` - multi-value; forwarded as the `finder` option of RewriteVersion::Transitional + BumpVersionAfterRelease (default path) and PkgVersion (task/manual_version path). Defaults to `:MainModule` when `no_cpan` is set, otherwise unset.
 
+### Build & Release
+- `weaver_config` - PodWeaver `config_plugin` to use (default: the bundle's own)
+- `installrelease_command` - Command used to install after release, instead of cpanm
+
+### Docker
+- `docker_image` - Image repository. Auto-adds one Docker::API plugin, which is a working Releaser on its own (no UploadToCPAN needed for non-CPAN dists)
+- `docker_tags` - Whitespace-separated tag list (default: `latest %V %v`)
+- `docker_local` - Build and tag the image, but don't push
+- `docker_default` - Set to 0 to suppress the auto-added plugin when you configure builds exclusively through `[@Author::GETTY::Docker / name]` subsections
+
 ### Support
 - `irc = #channel` - IRC channel
 - `irc_server` - Server (default: irc.perl.org)
@@ -46,8 +65,12 @@ copyright_holder = Copyright Owner
 
 ### Git
 - `release_branch` - Branch for releases (default: main)
+- `tag_format` - Release tag format. Default `%v`, the bare `$VERSION` (`0.317`) — *not* a v-prefixed SemVer tag. Use `v%v.0` when the tag must satisfy strict vMAJOR.MINOR.PATCH (Perl's decimal `$VERSION` has only two parts, the `.0` supplies the patch part)
+- `commit_files_after_release` - Multi-value; extra files folded into the release commit (via Git::Commit's `allow_dirty`). For artefacts a `run_before_release` hook rewrites, e.g. a sibling Python/JS version file
 
 ### Alien (prefix `alien_`)
+
+- `alien_build = 1` - Alien::Build-based dist: adds AlienBuild (Makefile.PL driven by Alien::Build::MM), implies `no_makemaker`, expects an `alienfile` in the dist root
 
 For wrapping C libraries with Alien::Base:
 
