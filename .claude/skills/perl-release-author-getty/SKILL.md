@@ -20,7 +20,7 @@ copyright_holder = Copyright Owner
 ## @Author::GETTY Options
 
 ### Feature Toggles (Boolean)
-- `no_cpan` - Skip UploadToCPAN
+- `no_cpan` - Skip UploadToCPAN; also defaults `version_finder` to `:MainModule`
 - `no_podweaver` - Skip PodWeaver
 - `no_changes` - Skip NextRelease
 - `no_installrelease` - Skip InstallRelease
@@ -37,6 +37,7 @@ copyright_holder = Copyright Owner
 - `task = 1` - TaskWeaver + AutoVersion
 - `manual_version = x.x` - Manual version
 - `major_version = 2` - Major version for AutoVersion
+- `version_finder` - multi-value; forwarded as the `finder` option of RewriteVersion::Transitional + BumpVersionAfterRelease (default path) and PkgVersion (task/manual_version path). Defaults to `:MainModule` when `no_cpan` is set, otherwise unset.
 
 ### Support
 - `irc = #channel` - IRC channel

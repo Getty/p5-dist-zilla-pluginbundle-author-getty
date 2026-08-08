@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+  - "no_cpan" now defaults "version_finder" to ":MainModule", so a
+    distribution that never reaches CPAN keeps its $VERSION in the main
+    module only. Setting "version_finder" explicitly still wins.
+
 0.317     2026-08-04 22:16:54Z
 
   - Add "tag_format" bundle option, forwarded to Git::Tag.tag_format (or the
