@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.318     2026-08-08 23:59:18Z
 
   - "no_cpan" now defaults "version_finder" to ":MainModule", so a
     distribution that never reaches CPAN keeps its $VERSION in the main
