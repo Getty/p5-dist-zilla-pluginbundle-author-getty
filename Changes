@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.319     2026-08-17 02:38:51Z
 
   - The commit that records the $VERSION bump after a release now picks up
     executables in "bin/" as well. @Git::VersionManager only allows
