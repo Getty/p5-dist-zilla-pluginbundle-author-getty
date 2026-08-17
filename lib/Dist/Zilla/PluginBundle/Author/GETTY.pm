@@ -96,6 +96,8 @@ In default configuration it is equivalent to:
 
   [@Git::VersionManager]
   ; handles versioning, changelog (NextRelease), commits, tags, and push
+  post-release commit.allow_dirty_match = ^bin/
+  ; ... the bundle adds this on top of the ^lib/.*\.pm$ default
 
   [GitHub::CreateRelease]
   branch     = main
@@ -273,6 +275,14 @@ Multi-value:
   run_before_release = xbin/release.pl python-prep %v
   commit_files_after_release = python/locale_simple.py
   commit_files_after_release = js/package.json
+
+This is B<not> needed for executables: the C<$VERSION> bump after a release
+covers F<bin/> (the C<:ExecFiles> finder) just like F<lib/>, but
+@Git::VersionManager only allows C<^lib/.*\.pm$> to be dirty in the commit that
+records the bump. The bundle therefore passes an additional
+C<allow_dirty_match> of C<^bin/> into that commit, so a bumped executable is
+committed along with the modules instead of being left behind in the working
+tree.
 
 =head2 no_podweaver
 
@@ -1252,6 +1262,11 @@ sub configure {
     $self->add_bundle('@Git::VersionManager' => {
       'RewriteVersion::Transitional.fallback_version_provider' => 'Git::NextVersion',
       'Git::Tag.tag_format' => $self->tag_format,
+      # BumpVersionAfterRelease rewrites :InstallModules *and* :ExecFiles, but
+      # @Git::VersionManager's post-release commit only allows ^lib/.*\.pm$ to be
+      # dirty. Without this the bumped executables under bin/ are left behind as
+      # uncommitted changes, so git ends up with bin/ one version behind lib/.
+      'post-release commit.allow_dirty_match' => [ '^bin/' ],
       $self->no_changes ? ( 'NextRelease.format' => '' ) : (),
       @{ $self->commit_files_after_release } ? ( commit_files_after_release => $self->commit_files_after_release ) : (),
       @{ $self->version_finder } ? (
