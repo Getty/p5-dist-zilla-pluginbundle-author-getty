@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+  - Require Dist::Zilla::Plugin::Docker::API 0.104, which logs the build
+    output of a failed image build before aborting, so the [@Author::GETTY::Docker]
+    build reports the failing step instead of only the exit status.
+
 0.320     2026-08-19 17:31:57Z
 
   - LICENSE is now expected as a committed file in the repository.
