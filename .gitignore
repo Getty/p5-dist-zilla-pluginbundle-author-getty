@@ -26,3 +26,7 @@
 Dist-Zilla-PluginBundle-Author-GETTY-*
 .build
 AGENTS.md
+
+# karr materialized task view -- never commit
+tasks/
+config.yml
