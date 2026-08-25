@@ -1,0 +1,17 @@
+---
+class: standard
+completed: 2026-08-25T05:34:34Z
+created: 2026-08-25T00:52:04Z
+id: 1
+priority: medium
+started: 2026-08-25T05:34:34Z
+status: done
+tags:
+- release
+title: Commit the Docker::API 0.104 pin with a Changes entry
+updated: 2026-08-25T05:34:39Z
+---
+
+cpanfile already carries requires 'Dist::Zilla::Plugin::Docker::API', '0.104' uncommitted, and {{$NEXT}} in Changes is empty. Both have to land in one commit before 0.321 can go out; 0.104 is the version that fixes the lost version tags on every build (see that dist's Changes).
+
+Committed as 8ac1c74 with a Changes entry, pushed.
