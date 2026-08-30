@@ -1,3 +1,5 @@
+{{$NEXT}}
+
 0.321     2026-08-30 05:47:00Z
 
   - Require Dist::Zilla::Plugin::Docker::API 0.104, which logs the build
