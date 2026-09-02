@@ -87,11 +87,12 @@ not user-facing there — mirror that when adding a bundle-injected key.
 `[@Author::GETTY]` dist consumes:
 
 ```yaml
-- uses: Getty/p5-dist-zilla-pluginbundle-author-getty/.github/actions/dzil-test@main
+- uses: Getty/p5-dist-zilla-pluginbundle-author-getty/.github/actions/dzil-test@v1
 ```
 
-Its four steps are the canonical dzil CI mechanics — change them here and every
-consuming dist's CI changes on the next run (they pin `@main`):
+Its four steps are the canonical dzil CI mechanics. Dists that pin `@v1` (the
+recommended ref) pick up a change here once the `v1` tag is moved onto it; dists
+still pinning `@main` get it on their next CI run:
 
 1. `cpanm -nq Dist::Zilla`
 2. `dzil authordeps --missing | cpanm -nq` — installs the bundle and every
