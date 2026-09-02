@@ -82,7 +82,7 @@ In default configuration it is equivalent to:
 
   [Authority]
   :version = 1.009
-  authority = cpan:GETTY ; or cpan:$authority if set
+  authority = cpan:GETTY ; cpan:$author, or cpan:$authority if set
   do_munging = 0
   do_metadata = 1
 
@@ -168,7 +168,9 @@ with ETHER as the authority:
   [@Author::GETTY]
   authority = ETHER
 
-If not set, defaults to the C<author> value.
+The value may be given either bare (C<ETHER>) or with the C<cpan:> prefix
+(C<cpan:ETHER>); both produce the same C<cpan:ETHER> authority, so the
+prefix is never doubled. If not set, defaults to the C<author> value.
 
 =head2 deprecated
 
@@ -627,8 +629,9 @@ has authority => (
   lazy    => 1,
   default => sub {
     my $self = shift;
-    return 'cpan:'.$self->payload->{authority} if $self->payload->{authority};
-    return 'cpan:'.$self->author;
+    my $id = $self->payload->{authority} || $self->author;
+    $id =~ s/\Acpan://i;
+    return 'cpan:'.$id;
   },
 );
 
