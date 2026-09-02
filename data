@@ -1,0 +1,31 @@
+---
+claimed_at: 2026-09-02T04:17:57Z
+claimed_by: claude-opus
+class: standard
+completed: 2026-09-02T17:15:28Z
+created: 2026-09-02T04:12:48Z
+id: 3
+priority: medium
+started: 2026-09-02T04:15:10Z
+status: done
+tags:
+- metadata
+- bug
+title: 'authority option doubles the cpan: prefix when payload already carries it'
+updated: 2026-09-02T17:15:28Z
+---
+
+lib/Dist/Zilla/PluginBundle/Author/GETTY.pm line ~630 computes x_authority as:
+
+    return 'cpan:'.$self->payload->{authority} if $self->payload->{authority};
+    return 'cpan:'.$self->author;
+
+The cpan: prefix is prepended UNCONDITIONALLY, with no guard for a payload that already carries it. So a dist.ini spelled `authority = cpan:JLMARTIN` -- which matches how x_authority values actually look in META -- yields the malformed `cpan:cpan:JLMARTIN`.
+
+Found downstream in IO-K8s (co-maintained, authority = cpan:JLMARTIN): every release to date shipped META.json with x_authority "cpan:cpan:JLMARTIN", which does not match cpan:JLMARTIN, so authority-aware tooling could not confirm the co-maintainer claim. IO-K8s worked around it by writing the bare PAUSE id in dist.ini.
+
+The POD documents the option bare (line ~169, `authority = ETHER`), so bare is the intended input -- but nothing enforces it and the doubling is silent. Note also the mixed signal at the SYNOPSIS (line ~85, `authority = cpan:GETTY ; or cpan:$authority if set`), which reads as if a cpan:-prefixed value is expected.
+
+Fix options: strip a leading `cpan:` from the payload before prepending, or accept both spellings idempotently. Either removes the footgun and lets downstreams write the natural cpan:PAUSEID form.
+
+2026-09-02 04:17 Fixed: authority attr now strips a leading cpan: (case-insensitive) before prepending, so both bare and cpan:-prefixed input yield one prefix. Same for the author fallback. Added t/authority.t (red before fix, green after). Aligned SYNOPSIS comment and =head2 authority POD. prove -lr t/, dzil build (META x_authority = cpan:GETTY, single prefix) and dzil test all green. Not committed per instruction; t/authority.t untracked so dzil test's git gather skips it until staged.
