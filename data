@@ -1,0 +1,18 @@
+---
+claimed_at: 2026-09-02T04:55:59Z
+claimed_by: claude-opus
+class: standard
+completed: 2026-09-02T17:15:32Z
+created: 2026-08-31T04:47:30Z
+id: 2
+priority: low
+started: 2026-09-02T04:55:59Z
+status: done
+tags:
+- ci
+- shared-action
+title: Pin consumers to a tagged dzil-test action once stable
+updated: 2026-09-02T17:15:32Z
+---
+
+The shared composite action .github/actions/dzil-test is consumed by every [@Author::GETTY] dist via @main, so every change lands in their CI immediately (README.md and the module CONTINUOUS INTEGRATION POD both note this). The action README documents the deferred decision: "Once stable, pin to a tag (@v1) for reproducibility." When the action mechanics settle, cut a tag and update the recommended `uses:` reference in README.md and the module POD together. Not urgent; tracked so the note in the README is not lost.
