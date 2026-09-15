@@ -31,6 +31,19 @@ mkdir -p "$src"
 cp -a "$CICD_WORKSPACE"/. "$src"/
 git config --global --add safe.directory "$src"
 cd "$src"
+
+# System packages the dist needs before its Perl deps will build. A libgit2-
+# backed dist lists the cmake/-dev toolchain here so Alien::Libgit2 can build
+# libgit2 from source; a pure-perl dist ships no file and apt is never touched.
+# One package per whitespace token; `#` starts a comment to end of line.
+if [ -f .simpici-apt ]; then
+  apt_pkgs="$(sed 's/#.*//' .simpici-apt | tr '\n' ' ')"
+  if [ -n "${apt_pkgs// /}" ]; then
+    apt-get update -qq
+    apt-get install -y --no-install-recommends $apt_pkgs
+  fi
+fi
+
 export PERL_CPANM_OPT="${PERL_CPANM_OPT:---mirror https://cpan.metacpan.org --mirror-only}"
 cpanm -nq Dist::Zilla
 dzil authordeps --missing | cpanm -nq

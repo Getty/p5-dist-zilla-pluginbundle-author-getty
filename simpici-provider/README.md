@@ -55,6 +55,23 @@ jobs:
 Ship your own `perl+<ver>+test.sh` (or any other `.cicd/*.sh`) to override or add
 jobs; the provider never clobbers a file you already have.
 
+## System packages (`.simpici-apt`)
+
+Some distributions need OS packages before their Perl dependencies will build —
+a libgit2-backed dist, for instance, needs the C toolchain and headers so
+`Alien::Libgit2` can compile libgit2 from source. List them, whitespace-separated,
+in a `.simpici-apt` file at the repository root:
+
+```
+# .simpici-apt — apt packages installed before dzil test
+cmake build-essential pkg-config
+libssl-dev libssh2-1-dev zlib1g-dev libzstd-dev
+```
+
+Each generated job runs `apt-get install` for those packages — in its Debian-based
+`perl:<ver>` container, before bootstrapping Dist::Zilla. The file is optional and
+`#` starts a comment; a pure-perl dist ships none and no apt call is made.
+
 ## The version matrix
 
 The supported versions live in [`perl-versions`](perl-versions) — the single
