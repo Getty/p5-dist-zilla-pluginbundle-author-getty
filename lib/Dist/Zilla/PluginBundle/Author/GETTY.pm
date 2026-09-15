@@ -23,7 +23,7 @@ sub bundle_config {
 
   $self->configure;
 
-  return $self->plugins->@*;
+  return @{ $self->plugins };
 }
 
 =head1 SYNOPSIS

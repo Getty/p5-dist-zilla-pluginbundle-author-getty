@@ -12,8 +12,8 @@ writable directory (`$CICD_PROVIDER_OUT`). This image writes one job file per
 supported Perl version there:
 
 ```
-perl+5.20+test.sh
 perl+5.22+test.sh
+perl+5.24+test.sh
 ...
 perl+5.44+test.sh
 lib/dzil-test.sh      # shared helper the jobs source

@@ -1,5 +1,12 @@
 {{$NEXT}}
 
+  - Add a SimpiCI provider (simpici-provider/): a pinned OCI image that generates
+    a `dzil test` job for every supported Perl version, so a distribution can run
+    its tests on SimpiCI with only a workflow and no committed .cicd. Published to
+    ghcr.io/getty/simpici-dzil-provider and defaulting to Perl 5.22 through 5.44.
+  - bundle_config now uses a classic dereference instead of the postfix `->@*`
+    form, so the bundle loads on Perl 5.22 (the previous syntax needed 5.24+).
+
 0.321     2026-08-30 05:47:00Z
 
   - Require Dist::Zilla::Plugin::Docker::API 0.104, which logs the build
