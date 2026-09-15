@@ -39,6 +39,9 @@ name: CI
 on:
   push:
   pull_request:
+concurrency:                                    # cancel a branch's superseded runs
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   simpici:
     permissions:
