@@ -1,0 +1,68 @@
+---
+claimed_at: 2026-09-15T02:49:44Z
+claimed_by: p5-dist-zilla-pluginbundle-author-getty
+class: standard
+completed: 2026-09-15T02:49:44Z
+created: 2026-09-15T02:10:24Z
+id: 4
+priority: high
+started: 2026-09-15T02:37:48Z
+status: done
+tags:
+- feature
+- simpici
+- provider
+- blocked
+title: 'SimpiCI-Provider: Getty dzil-test-Matrix als Provider-Image'
+updated: 2026-09-15T02:49:44Z
+---
+
+## Ziel
+
+Der bundle-spezifische **SimpiCI-Provider** fuer [@Author::GETTY] -- NICHT "Perl-Support
+in SimpiCI", sondern Gettys eigener Provider, der zufaellig `dzil test` macht. Er emittiert
+eine `dzil test`-Matrix ueber die unterstuetzten Perl-Versionen als generierte
+`.cicd`-`.sh`-Dateien in SimpiCIs Staging-Dir.
+
+## ABHAENGIGKEIT
+
+Bindet an **SimpiCI karr #7** (der generische Provider-Hook). **Erst umsetzen, wenn der
+finale Provider-Vertrag aus #7 steht** (wie SimpiCI den Provider aufruft, was gemountet
+wird, wo geschrieben wird, skip-if-exists). Der #7-Agent liefert den Vertrag verbatim.
+
+## Was der Provider tut
+
+- Delivery: **gepinntes OCI-Image** (Empfehlung aus #7). Klein, publizierbar.
+- Fuer jede unterstuetzte Perl-Version eine Datei `perl+<ver>+test.sh` in die Staging-Dir
+  schreiben (**KEIN Job-Suffix** -> `job=perl+<ver>`, eindeutig; Suffix wuerde an der
+  phase/job-Dedupe kollidieren). Skip-if-exists respektieren (User-Datei gewinnt).
+- Jede Datei faehrt den **dzil-test-Helper**: `cp -a /workspace -> $CICD_OUTPUT/src`
+  (inkl. `.git`, da Git::GatherDir), `git config --global --add safe.directory <copy>`,
+  `cpanm -nq Dist::Zilla`, `dzil authordeps --missing | cpanm -nq`,
+  `dzil listdeps --author --missing | cpanm -nq`, `dzil test`. Das ist exakt die
+  bestehende `.github/actions/dzil-test` Composite-Action, angepasst an den read-only
+  Workspace.
+
+## Single source of truth fuer unterstuetzte Perls
+
+Eine kanonische Liste (Default `5.36 5.38 5.40`, heute im eigenen `ci.yml` des Bundles
+hartkodiert). Der Provider liest diese Liste. Optional/bonus: das eigene `ci.yml` des
+Bundles spaeter aus derselben Quelle speisen (DRY).
+
+## v1 / Non-Goals
+
+v1 = nur der Bundle-Default (alle unterstuetzten Perls). **Per-Dist-Override**
+(z.B. `simpici_perl` in dist.ini, vom Provider aus dem Checkout gelesen) = sauber
+dokumentierte spaetere Erweiterung, nicht v1.
+
+## Testing
+
+Provider-Image lokal gegen SimpiCIs Executor / das `t/action-runner.sh`-Muster testen:
+Image erzeugt die erwarteten `perl+<ver>+test.sh`, diese laufen und `dzil test` gruen.
+
+## Refs
+
+SimpiCI karr #7 (Provider-Hook + Vertrag). BeePack ist erster Konsument (eigenes Ticket
+im p5-beepack-Board).
+
+Provider implemented: simpici-provider/ (alpine emitter image + emit.sh + perl-versions + README) and .github/workflows/simpici-provider.yml (publishes ghcr.io/getty/simpici-dzil-provider:main + :sha). Emitter tested locally (DOCKER_BUILDKIT=0 build; emits perl+5.36/5.38/5.40+test.sh + lib/dzil-test.sh, all executable, bash -n clean). Matches simpici f3e3b60 contract verbatim. Committed, not pushed.
