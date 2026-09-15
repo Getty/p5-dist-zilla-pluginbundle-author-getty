@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.322     2026-09-15 20:09:52Z
 
   - SimpiCI provider: a distribution can now ship a `.simpici-apt` file listing
     apt packages that every generated `dzil test` job installs before building
