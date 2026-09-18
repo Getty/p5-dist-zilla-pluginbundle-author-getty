@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.323     2026-09-18 02:52:39Z
 
   - SimpiCI provider: the generated `dzil test` job now exports
     `DZIL_DOCKER_API_SKIP=1`, so a `[@Author::GETTY::Docker]` distribution tests
