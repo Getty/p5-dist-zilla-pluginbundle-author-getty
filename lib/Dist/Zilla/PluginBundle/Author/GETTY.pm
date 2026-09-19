@@ -403,9 +403,10 @@ the current maintainer is looking for someone to take over the module.
 =head2 alien_build
 
 Set to 1 for distributions that use L<Alien::Build> to provide a C library.
-This automatically sets B<no_makemaker> to 1 and adds
-L<Dist::Zilla::Plugin::AlienBuild>, which generates a C<Makefile.PL> driven
-by C<Alien::Build::MM>. Ship an C<alienfile> in the distribution root to
+This adds L<Dist::Zilla::Plugin::AlienBuild>, which generates a C<Makefile.PL>
+driven by C<Alien::Build::MM> — B<no_makemaker> is left at its default (0),
+since C<Alien::Build::MM> munges the MakeMaker-generated C<Makefile.PL>
+rather than replacing it. Ship an C<alienfile> in the distribution root to
 describe how to probe for or build the library.
 
   [@Author::GETTY]
