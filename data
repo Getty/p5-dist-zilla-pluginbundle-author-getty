@@ -1,0 +1,20 @@
+---
+class: standard
+completed: 2026-09-19T00:56:12Z
+created: 2026-09-18T04:22:48Z
+id: 6
+priority: low
+started: 2026-09-19T00:56:12Z
+status: done
+tags:
+- dist
+- manifest
+- fleet
+title: 'Fleet-weit: .claude/ (agents/rules/skills/CLAUDE.md) aus dem CPAN-Tarball
+  prunen'
+updated: 2026-09-19T00:56:23Z
+---
+
+Getty-Dists committen .claude/ (agents/rules/skills, settings.json) sowie CLAUDE.md per .gitignore-Policy. Dadurch landet die Agenten-Infra-Prosa im gebauten CPAN-Tarball — kein PruneCruft/MANIFEST.SKIP schliesst sie aus (beobachtet in Alien::TinyCDB durch den Release-Checker: .claude/agents, .claude/rules, .claude/skills, CLAUDE.md standen im MANIFEST). Gilt fleet-weit, weil alle Dists dieses Bundle nutzen -> zentraler Fix gehoert hierher: das Author::GETTY-Bundle sollte .claude/ (und evtl. CLAUDE.md) per Prune aus dem gebauten Tarball nehmen, damit es fuer alle Dists auf einmal greift. Zu entscheiden: alles unter .claude/ prunen? CLAUDE.md auch? Als default oder opt-out-Attribut? Kein funktionaler Schaden (versendet nur Prosa), aber unnoetiger CPAN-Ballast. Entdeckt beim Alien::TinyCDB Alien::Build-Migrations-Release.
+
+2026-09-19 00:56 Scope-Entscheidung (Maintainer): .claude/ (agents/rules/skills/CLAUDE.md) bleibt bewusst im CPAN-Tarball -- kein Prune. Nur F<.karr> soll aus CPAN-Releases raus, das ist bereits umgesetzt und gemerged (commit 3e9750a, gated auf no_cpan). Ticket damit im urspruenglichen Scope erledigt/abgelehnt; .claude/-Pruning wird nicht verfolgt.
