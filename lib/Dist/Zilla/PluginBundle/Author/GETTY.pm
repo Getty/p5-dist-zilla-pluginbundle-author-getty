@@ -139,6 +139,12 @@ excluding I<root> or I<prefix>:
   gather_exclude_filename = dir/skip
   gather_exclude_match = ^local_
 
+F<.karr> — the tracked config file for the karr autonomous-loop prompt, not
+the kanban board state itself (that lives in C<refs/karr/*>) — is also
+excluded from the gathered distribution files for CPAN releases (the
+default, C<no_cpan = 0>). Set C<no_cpan = 1> to keep it in the built
+distribution.
+
 It also combines on request with L<Dist::Zilla::Plugin::Alien>, you can set
 all parameter of the Alien plugin here, just by preceeding with I<alien_>, the
 only required parameter here is C<alien_repo>:
@@ -298,6 +304,10 @@ avoids awkward rendering on sites like MetaCPAN.
 
 Set this attribute to 1 if you explicitly want to ship F<README.md> in the
 distribution.
+
+F<.karr> is also excluded from the gathered distribution files, independently
+of this attribute, whenever this is a CPAN release (C<no_cpan = 0>, the
+default). Set C<no_cpan = 1> to have it included in the built distribution.
 
 =head2 generate_license
 
@@ -1057,6 +1067,7 @@ sub effective_gather_exclude_filename {
 
   my @exclude = @{ $self->gather_exclude_filename };
   push @exclude, 'README.md' unless $self->include_readme;
+  push @exclude, '.karr' unless $self->no_cpan;
 
   my %seen;
   return [ grep { !$seen{$_}++ } @exclude ];
