@@ -1,0 +1,21 @@
+---
+class: standard
+completed: 2026-09-19T00:56:07Z
+created: 2026-09-18T04:17:57Z
+id: 5
+priority: medium
+started: 2026-09-19T00:56:07Z
+status: done
+tags:
+- docs
+- pod
+- alien
+title: 'POD-Drift: alien_build behauptet faelschlich, es setze no_makemaker=1'
+updated: 2026-09-19T00:56:07Z
+---
+
+lib/Dist/Zilla/PluginBundle/Author/GETTY.pm, =head2 alien_build (Z. 393-399): POD sagt 'This automatically sets no_makemaker to 1 and adds Dist::Zilla::Plugin::AlienBuild, which generates a Makefile.PL driven by Alien::Build::MM.' Falsch UND selbstwiderspruechlich:
+1) Code setzt no_makemaker NICHT via alien_build. Default (Z. 799): (payload->{no_makemaker} || is_alien || xs || xs_alien) ? 1 : 0 — alien_build fehlt.
+2) Widerspruch: no_makemaker=1 entfernt MakeMaker (Z. 1087: push \@removes,'MakeMaker' if no_makemaker), aber Alien::Build::MM MUNGED die MakeMaker-generierte Makefile.PL -> MakeMaker MUSS bleiben. Waere alien_build tatsaechlich no_makemaker=1, gaebe es keine Makefile.PL zum Mungen und jeder Alien::Build-Dist waere kaputt.
+Fix: In =head2 alien_build den Teilsatz 'This automatically sets no_makemaker to 1 and' streichen; korrekt: alien_build fuegt AlienBuild hinzu und BEHAELT MakeMaker. (=head2 xs Z. 323 'sets no_makemaker to 1' bleibt korrekt, weil xs im Default steht.)
+Gefunden beim Alien::TinyCDB-Migrations-Release (ModuleBuild->Alien::Build): dort verifiziert, dass der Build nur funktioniert, weil MakeMaker erhalten bleibt (META: Makefile.PL mit Alien::Build::MM, kein Build.PL).
