@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.324     2026-09-19 01:05:02Z
 
   - F<.karr> is now excluded from the gathered distribution files for CPAN
     releases, so it never lands in a consuming dist's release tarball. No
