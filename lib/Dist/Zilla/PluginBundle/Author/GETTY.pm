@@ -284,13 +284,13 @@ Multi-value:
   commit_files_after_release = python/locale_simple.py
   commit_files_after_release = js/package.json
 
-This is B<not> needed for executables: the C<$VERSION> bump after a release
-covers F<bin/> (the C<:ExecFiles> finder) just like F<lib/>, but
+This is B<not> needed for Perl executables: the C<$VERSION> bump after a
+release covers them through the C<:PerlExecFiles> finder, but
 @Git::VersionManager only allows C<^lib/.*\.pm$> to be dirty in the commit that
 records the bump. The bundle therefore passes an additional
-C<allow_dirty_match> of C<^bin/> into that commit, so a bumped executable is
-committed along with the modules instead of being left behind in the working
-tree.
+C<allow_dirty_match> of C<^bin/> into that commit, so a bumped Perl executable
+is committed along with the modules instead of being left behind in the
+working tree.
 
 =head2 no_podweaver
 
@@ -455,9 +455,11 @@ set)
 
 =back
 
-Unset by default, leaving those plugins at their own defaults — except
-with B<no_cpan>, where it defaults to C<:MainModule>. Setting it
-explicitly always wins.
+By default, CPAN distributions use C<:InstallModules> and
+C<:PerlExecFiles>: modules and Perl executables get the distribution version,
+while Bash and other non-Perl executables are not parsed by the PPI-based
+version plugins. With B<no_cpan>, the default is C<:MainModule>. Setting the
+option explicitly always wins.
 
 =head1 CONTINUOUS INTEGRATION
 
@@ -922,8 +924,12 @@ has version_finder => (
     return $self->payload->{version_finder}
       if defined $self->payload->{version_finder};
     # A dist that never reaches CPAN has no per-package indexing to satisfy,
-    # so one $VERSION in the main module is all it needs.
-    return $self->no_cpan ? [':MainModule'] : [];
+    # so one $VERSION in the main module is all it needs. CPAN dists version
+    # installed modules and Perl executables, but never parse other executables
+    # (for example Bash scripts) with the PPI-based version plugins.
+    return $self->no_cpan
+      ? [':MainModule']
+      : [':InstallModules', ':PerlExecFiles'];
   },
 );
 
@@ -1307,10 +1313,10 @@ sub configure {
     $self->add_bundle('@Git::VersionManager' => {
       'RewriteVersion::Transitional.fallback_version_provider' => 'Git::NextVersion',
       'Git::Tag.tag_format' => $self->tag_format,
-      # BumpVersionAfterRelease rewrites :InstallModules *and* :ExecFiles, but
+      # The configured default bumps :InstallModules and :PerlExecFiles, but
       # @Git::VersionManager's post-release commit only allows ^lib/.*\.pm$ to be
-      # dirty. Without this the bumped executables under bin/ are left behind as
-      # uncommitted changes, so git ends up with bin/ one version behind lib/.
+      # dirty. Without this, bumped Perl executables under bin/ are left behind
+      # as uncommitted changes, so their source stays one version behind lib/.
       'post-release commit.allow_dirty_match' => [ '^bin/' ],
       $self->no_changes ? ( 'NextRelease.format' => '' ) : (),
       @{ $self->commit_files_after_release } ? ( commit_files_after_release => $self->commit_files_after_release ) : (),
