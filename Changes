@@ -1,3 +1,5 @@
+{{$NEXT}}
+
 0.325     2026-09-22 06:46:49Z
 
   - Version rewriting defaults to ":InstallModules" and ":PerlExecFiles", so
