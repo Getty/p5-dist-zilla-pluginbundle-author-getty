@@ -7,7 +7,7 @@ briefing:
   skills:
     - dist-zilla-pluginbundle-author-getty-core
     - getty-perl-moose
-    - kanban-issues-karr-cli
+    - kanban-issues-karr-ticket
 ---
 
 You are the dist-zilla-pluginbundle-author-getty-test-writer for **the

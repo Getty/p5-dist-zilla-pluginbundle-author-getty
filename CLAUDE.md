@@ -12,7 +12,7 @@ principle and lanes are in `.claude/rules/dist-zilla-pluginbundle-author-getty-r
 |---|---|
 | Implement / refactor / debug the bundle, subsection, GiteaMeta, the CI action | `dist-zilla-pluginbundle-author-getty-worker` (default) |
 | Write/extend tests | `dist-zilla-pluginbundle-author-getty-test-writer` |
-| Pre-release audit | `dist-zilla-pluginbundle-author-getty-release-checker` |
+| Commits, `Changes`, card → done, pre-release audit | `dist-zilla-pluginbundle-author-getty-release-manager` |
 
 The agents carry their skills via `briefing.skills` (see `.claude/agents/`); the main
 agent delegates rather than loading them. Architecture, the shared `dzil-test` CI action

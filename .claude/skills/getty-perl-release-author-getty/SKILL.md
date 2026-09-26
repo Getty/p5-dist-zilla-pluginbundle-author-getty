@@ -1,6 +1,6 @@
 ---
 name: getty-perl-release-author-getty
-description: Load when a dist.ini contains [@Author::GETTY] — bundle options, POD conventions (=attr/=method/=opt), next-version semantics, the dzil release workflow.
+description: Load when a dist.ini contains [@Author::GETTY] and you prepare a release or change dist.ini — bundle options, LICENSE, next-version semantics, the Changes file, the dzil release workflow. POD conventions are in getty-perl-pod.
 user-invocable: false
 allowed-tools: Read, Grep
 model: sonnet
@@ -66,13 +66,6 @@ generated file and adds no check.
 released to CPAN — a proprietary application, a deploy artefact — lists its
 Dist::Zilla plugins explicitly instead, because the bundle assumes a CPAN
 release. Non-CPAN dists that still use the bundle set `no_cpan = 1`.
-
-## `# ABSTRACT` lines
-
-Every file the bundle processes carries `# ABSTRACT: <one line>` directly under
-`package`, before any `use`; executables in `bin/` carry it under the shebang.
-PodWeaver turns it into the NAME section. Outside a bundle-managed distribution
-the line does nothing — do not scatter it into files Dist::Zilla never sees.
 
 ## @Author::GETTY Options
 
@@ -174,25 +167,6 @@ performs; the hook is for what it does *not* know about.
 run = docker build -t registry/app:%v %d && docker push registry/app:%v
 ```
 
-## POD Commands (Pod::Elemental::Transformer::Author::GETTY)
-
-### Section Commands (→ =head1)
-- `=synopsis` → `=head1 SYNOPSIS`
-- `=description` → `=head1 DESCRIPTION`
-- `=seealso` → `=head1 SEE ALSO`
-
-### Inline Commands (→ =head2)
-- `=attr name` → `=head2 name`
-- `=method method_name` → `=head2 method_name`
-- `=func func_name` → `=head2 func_name`
-- `=opt` - CLI options
-- `=env` - Environment variables
-- `=hook` - Hooks
-- `=example` - Examples
-
-**Auto-generated sections (do NOT write manually):**
-NAME, VERSION, AUTHOR, SUPPORT, CONTRIBUTING, COPYRIGHT
-
 ## Versioning Convention — CRITICAL
 
 **The version in the repository is always the NEXT release version, not the current one.**
@@ -211,30 +185,17 @@ After `dzil release` runs:
 
 **Do NOT bump the version manually before a release** — `dzil release` handles this automatically.
 
-### Every file carries its own `$VERSION`
+## The Changes file
 
-**Each module under `lib/` and each Perl executable under `bin/` needs its own
-`our $VERSION = '...';`**, set to the version that will be released NEXT — one
-higher than what is on CPAN (or higher). A Perl source file without a `$VERSION`
-ships versionless and breaks consumers that pin against it. Bash and other
-non-Perl executables are still installed from `bin/`, but are deliberately
-excluded from the PPI-based version rewrite.
+Every distribution ships a `Changes` file with a `{{$NEXT}}` token at the top (Dist::Zilla's `[NextRelease]` fills it at release time).
 
-**Only the FIRST `our $VERSION` in a file gets rewritten.** RewriteVersion::Transitional
-and BumpVersionAfterRelease both stop after the first match, so a file holding two
-packages leaves the second one frozen at whatever version it was written with —
-while MetaProvides::Update happily reports the real release version. The result is
-a distribution whose META and whose code disagree, silently, for as many releases
-as it takes someone to notice.
-
-So: **one package per file.** If you find several `package` statements in one file,
-split them out before releasing.
-
-**Executables belong in `bin/`, never `script/`.** The bundle sets no `ExecDir`, so
-Dist::Zilla's default of `bin` applies: files under `script/` are not installed as
-executables, and a Perl executable there has no `$VERSION` rewrite. A distribution
-with a `script/` directory should have it renamed to `bin/` — otherwise none of
-the executable handling takes effect.
+- **Add a bullet under `{{$NEXT}}` in the SAME commit as any user-facing change** — new bindings, behaviour changes, bug fixes, deprecations. If a CPAN consumer would notice, it belongs there.
+- **Measured against the last RELEASE, not the last commit.** "Would a consumer notice?" is asked against the version on CPAN. Something broken *and* fixed while unreleased was never visible to anyone and gets no bullet, however many commits it cost — a dependency floor corrected before it shipped, a rename that never left the branch, a bug the new test found. A changelog is the difference between two releases, not a work log.
+- **Before the FIRST release there is no "no longer".** A distribution with nothing on CPAN has a `{{$NEXT}}` that says what the thing IS, not how it came to be. "no longer", "used to", "previously", "instead of" are wrong by construction there — the reader has never seen the old behaviour. Write that block as one document when the release is cut, not bullet by bullet along the way.
+- **Match the existing style:** two-space indent, `  - ` bullets, wrap near 78 columns, present-tense imperative ("New binding X", "Fix Y on macOS").
+- **One topic, one bullet, one to three lines** — touching an area again rewrites the bullet that is already there instead of adding a second. Wording and length: `getty-git-commit-style`.
+- **Skip pure dev-tooling noise** — skill hardlinks, editor config, internal CI refactors. A CI fix that unbreaks the build for everyone IS worth a line.
+- **Never hand-edit the version line or timestamp** — `[NextRelease]` owns those.
 
 ## Release Workflow
 
@@ -262,9 +223,8 @@ snapshot silently, under a message naming only the version.
 ## Conventions
 
 1. `copyright_year` IS used in dist.ini — GETTY has it in ALL distributions, do NOT remove it
-2. No `=head1 SUPPORT/AUTHOR/COPYRIGHT` in POD
-3. Use inline `=attr`/`=method` directly after code
-4. Dependencies in `cpanfile`, not dist.ini
-5. Changes file with `{{$NEXT}}` for unreleased
-6. For XS+Alien modules: use `xs_alien = Alien::Foo` (auto-configures MakeMaker::Awesome)
-7. `LICENSE` is generated once with `dzil genlicense` and **committed** — the build aborts without it
+2. POD conventions (`=attr`/`=method`, `# ABSTRACT`, generated sections): skill `getty-perl-pod`
+3. Dependencies in `cpanfile`, not dist.ini
+4. Changes file with `{{$NEXT}}` for unreleased — see "The Changes file" above
+5. For XS+Alien modules: use `xs_alien = Alien::Foo` (auto-configures MakeMaker::Awesome)
+6. `LICENSE` is generated once with `dzil genlicense` and **committed** — the build aborts without it

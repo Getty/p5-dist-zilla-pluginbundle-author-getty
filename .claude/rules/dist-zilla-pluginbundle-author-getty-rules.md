@@ -34,7 +34,7 @@ This rule depends on whether the Agent/Task tool is available to you.
 
 - **You can spawn subagents** (orchestrating main agent): Do NOT touch behavior-relevant
   code yourself — delegate. Your lane: coordinate, inspect, plan, review diffs, run
-  tests, manage git, edit non-behavioral docs. When in doubt, delegate. Why: only the
+  tests, edit non-behavioral docs. When in doubt, delegate. Why: only the
   `dist-zilla-pluginbundle-author-getty-*` agents get their skills force-loaded via
   `briefing.skills`; you get no briefing and would touch internals with too little
   context.
@@ -43,7 +43,7 @@ This rule depends on whether the Agent/Task tool is available to you.
   |---|---|
   | Implement / refactor / debug the bundle, subsection, GiteaMeta, the CI action | `dist-zilla-pluginbundle-author-getty-worker` (default) |
   | Write/extend tests | `dist-zilla-pluginbundle-author-getty-test-writer` |
-  | Pre-release audit | `dist-zilla-pluginbundle-author-getty-release-checker` |
+  | Commits, `Changes`, card → done, pre-release audit | `dist-zilla-pluginbundle-author-getty-release-manager` |
 
 - **You cannot spawn subagents** (you ARE a `dist-zilla-pluginbundle-author-getty-*`
   agent): the delegation lock does not apply to you — implement, refactor, debug and test
@@ -53,6 +53,9 @@ Behavior-relevant = `configure()` and the bundle's attribute surface, the
 `@Author::GETTY::Docker` subsection, the `GiteaMeta` plugin, the POD transformer/weaver,
 `.github/actions/dzil-test/action.yml`, `cpanfile`, and tests. Pure prose docs and
 `Changes` notes are not.
+
+**Only `dist-zilla-pluginbundle-author-getty-release-manager` commits.** A worker leaves a commit-ready tree and hands its card
+to `review`; you then dispatch `dist-zilla-pluginbundle-author-getty-release-manager` to cut the commit and close the card.
 
 ## Commit messages — no bundle/plugin namespace prefix
 
@@ -66,11 +69,11 @@ mistake); keep it at one.
 ## Coordination — karr board (always in scope)
 
 Ticket coordination is the orchestrating agent's job, so `karr` is always in scope —
-don't invoke the `kanban-issues-karr-cli` skill first, just use it. Git-native kanban;
+don't invoke the `kanban-issues-karr-coordination` skill first, just use it. Git-native kanban;
 state lives in `refs/karr/*`; one board, this repo. Day-to-day: `karr list --compact` /
 `karr board` for open work; `karr show ID` for detail; `karr create/edit/move/handoff`
 for the usual flow; mutating commands auto-sync. Full surface: skill
-`kanban-issues-karr-cli`.
+`kanban-issues-karr-coordination`.
 
 Cross-repo work is a ticket on the *other* repo's board (`cd ../p5-dist-zilla-plugin-docker-api
 && karr create …`), never a direct edit there.
