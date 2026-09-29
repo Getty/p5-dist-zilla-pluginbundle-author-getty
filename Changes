@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.326     2026-09-29 17:20:32Z
 
   - Every distribution built with [@Author::GETTY] now snapshots its agent
     context (.claude/.codex, CLAUDE.md, AGENTS.md, skilletor.lock.json, ...)
