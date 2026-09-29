@@ -1099,6 +1099,11 @@ sub configure {
     scalar @{$self->gather_exclude_match} > 0 ? ( exclude_match => $self->gather_exclude_match ) : (),
   }]);
 
+  # Snapshot the agent context (.claude/.codex/CLAUDE.md/...) into the build
+  # under misc/agent-context/ for build provenance (not installed). Reads from
+  # disk, so it also captures skilletor-installed (git-ignored) skills.
+  $self->add_plugins('GatherAgentContext');
+
   my @removes = ('GatherDir','PruneCruft');
   if ($self->no_cpan || $self->no_makemaker) {
     push @removes, 'UploadToCPAN' if $self->no_cpan;
