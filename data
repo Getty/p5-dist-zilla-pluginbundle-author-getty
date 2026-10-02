@@ -1,0 +1,25 @@
+---
+class: standard
+created: 2026-10-02T02:57:02Z
+id: 7
+priority: medium
+status: backlog
+tags:
+- bundle
+- bug
+title: configure() guards call log_fatal, which the bundle does not have
+updated: 2026-10-02T02:57:02Z
+---
+
+Three guards in configure() (lib/Dist/Zilla/PluginBundle/Author/GETTY.pm, lines 1134-1141) call $self->log_fatal:
+
+- weaver_config together with is_task
+- author together with no_cpan
+- no_install together with no_makemaker
+
+The bundle class has no log_fatal (Dist::Zilla::Role::PluginBundle::Easy does not provide a logger), so each guard dies with "Can't locate object method \"log_fatal\" via package Dist::Zilla::PluginBundle::Author::GETTY" instead of its own message. The build still aborts, but the user never sees why.
+
+Reproduce:
+  perl -Ilib -MDist::Zilla::PluginBundle::Author::GETTY -e 'Dist::Zilla::PluginBundle::Author::GETTY->new(name=>q{@Author::GETTY},payload=>{no_install=>1,no_makemaker=>1})->configure'
+
+Wanted: each guard aborts with its intended message. The no_license/generate_license guard added in 5fec0ba already uses a plain die with a "[@Author::GETTY]" prefix - bring the three in line with it (or give the bundle one small fatal helper and use it for all four). Add a test per guard that asserts on the message; t/license_file.t has the pattern for the fourth.
