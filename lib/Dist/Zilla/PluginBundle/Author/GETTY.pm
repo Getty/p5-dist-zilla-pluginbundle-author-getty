@@ -52,6 +52,7 @@ are default):
   no_cpan = 0
   no_install = 0
   no_makemaker = 0
+  no_license = 0 ; 1 when no_cpan is set
   no_installrelease = 0
   no_changes = 0
   no_podweaver = 0
@@ -331,6 +332,20 @@ there to be found. Write the file with C<dzil genlicense> and commit it.
 Set this attribute to 1 to go back to the generated file — C<@Basic> keeps its
 License plugin and no check is added. Use it for distributions that
 deliberately ship no committed F<LICENSE>.
+
+=head2 no_license
+
+If set to 1, the bundle does nothing about F<LICENSE>: none is generated and
+no committed one is demanded. A F<LICENSE> that is committed anyway is still
+gathered from git like any other file, just not checked. C<license> in
+F<dist.ini> stays required by L<Dist::Zilla> and still feeds the metadata and
+the POD.
+
+This is the default with C<no_cpan = 1> — a distribution that never reaches
+CPAN is usually private and has no licence to publish. Set C<no_license = 0>
+to keep the committed-file check there, or C<generate_license = 1> to have the
+file generated. C<no_license = 1> together with C<generate_license = 1> is an
+error.
 
 =head2 xs
 
@@ -862,6 +877,17 @@ has generate_license => (
   default => sub { $_[0]->payload->{generate_license} },
 );
 
+has no_license => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub {
+    my $self = shift;
+    return $self->payload->{no_license} if defined $self->payload->{no_license};
+    return ($self->no_cpan && !$self->generate_license) ? 1 : 0;
+  },
+);
+
 has xs => (
   is      => 'ro',
   isa     => 'Bool',
@@ -1114,6 +1140,9 @@ sub configure {
   $self->log_fatal("no_install can't be used together with no_makemaker")
     if $self->no_install and $self->no_makemaker;
 
+  die "[\@Author::GETTY] you must not specify both no_license and generate_license\n"
+    if $self->no_license and $self->generate_license;
+
   $self->add_plugins([ 'Git::GatherDir' => {
     include_dotfiles => $self->gather_include_dotfiles,
     include_untracked => $self->gather_include_untracked,
@@ -1133,14 +1162,15 @@ sub configure {
   }
   # LICENSE is a committed repository file, gathered from git like any other
   # source file, so that the hosting platform detects the licence. @Basic's
-  # License plugin would generate a second one and abort the build.
+  # License plugin would generate a second one and abort the build. With
+  # no_license nothing generates a LICENSE and nothing demands one.
   push @removes, 'License' unless $self->generate_license;
   $self->add_bundle('Filter' => {
     -bundle => '@Basic',
     -remove => [@removes],
   });
 
-  $self->add_plugins('LicenseFile') unless $self->generate_license;
+  $self->add_plugins('LicenseFile') unless $self->generate_license || $self->no_license;
 
   if ($self->no_install) {
     $self->add_plugins('MakeMaker::SkipInstall');

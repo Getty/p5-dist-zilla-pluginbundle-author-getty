@@ -81,6 +81,8 @@ Auto-generated sections: NAME, VERSION, SUPPORT, CONTRIBUTING, AUTHORS, LICENSE
 | `no_podweaver` | `0` | Disable Pod::Weaver processing |
 | `no_install` | `0` | Make distribution non-installable |
 | `no_makemaker` | `0` | Don't use MakeMaker (auto-set for XS/Alien) |
+| `no_license` | `0` | Neither generate nor demand a `LICENSE` (auto-set for `no_cpan`) |
+| `generate_license` | `0` | Generate `LICENSE` at build time instead of demanding a committed one |
 | `no_installrelease` | `0` | Don't install after release |
 | `include_readme` | `0` | Ship `README.md` in the distribution (excluded by default) |
 | `xs` | `0` | Use ModuleBuildTiny for pure-Perl XS modules |

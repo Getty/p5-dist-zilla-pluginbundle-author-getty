@@ -1,5 +1,12 @@
 {{$NEXT}}
 
+  - New "no_license" attribute: the bundle neither generates a LICENSE nor
+    demands a committed one. "no_cpan" now implies it, so a private dist no
+    longer aborts with "no LICENSE in the distribution". A LICENSE that is
+    committed anyway is still shipped, just no longer checked against
+    dist.ini. Set "no_license = 0" to keep the check, or
+    "generate_license = 1" to keep the generated file.
+
 0.326     2026-09-29 17:20:32Z
 
   - Every distribution built with [@Author::GETTY] now snapshots its agent
