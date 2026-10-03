@@ -1,0 +1,32 @@
+---
+class: standard
+created: 2026-10-03T04:25:50Z
+id: 8
+priority: low
+status: backlog
+tags:
+- bundle
+- pod
+- license
+title: Link to raudssus.de in the POD copyright section without literal L<> in README
+  and LICENSE
+updated: 2026-10-03T04:28:43Z
+---
+
+Wanted: every module's COPYRIGHT AND LICENSE POD section links to https://raudssus.de/, but the plain-text README and the LICENSE file do not print POD markup.
+
+Today the link rides on the holder string: 40 p5-* dists set
+  copyright_holder = Torsten Raudssus <torsten@raudssus.de> L<https://raudssus.de/>
+which gives the link in the woven POD, and prints 'L<https://raudssus.de/>' literally in the generated README (copyright line) and twice in LICENSE (Perl_5 text, lines 10 and 269). 17 dists carry only 'Torsten Raudssus' (no link anywhere).
+
+Also seen while counting (dist.ini of the sibling checkouts, 2026-10-03):
+- p5-www-picnic has a different URL in the holder: L<https://raudss.us/>.
+- The same markup sits in the 'author' line of p5-net-async-crawl4ai, p5-net-async-websearch, p5-www-chain and p5-www-crawl4ai (L<https://raudss.us/>).
+- p5-alien-tinycdb, p5-beepack and p5-mcp-picnic use the e-mail torsten@raudss.us in 'author'.
+Whether raudss.us is intended there is for the maintainer to say.
+
+Found in the pre-release audit of Kubernetes-Comb-SVG (2026-10-03). Dropping the markup there was tried and taken back: the link then disappears from the POD of every module and of bin/comb-svg.
+
+To decide (maintainer, not urgent): where the link should come from so the holder string can stay plain - e.g. the bundle's PodWeaver setup adding it to the legal/author section, or stripping POD markup where LICENSE and README are generated. Look at how the dists differ today first, then settle one form for all of them. The two ideas are untested suggestions, not a design.
+
+2026-10-03 04:28 Maintainer decision (2026-10-03): raudssus.de is the current form - e-mail torsten@raudssus.de, URL https://raudssus.de/. The raudss.us occurrences listed above are outdated, not intended: the holder URL in p5-www-picnic, the L<https://raudss.us/> in the author line of p5-net-async-crawl4ai, p5-net-async-websearch, p5-www-chain and p5-www-crawl4ai, and the torsten@raudss.us e-mail in p5-alien-tinycdb, p5-beepack and p5-mcp-picnic. Bring them to raudssus.de when this card is worked; nothing was changed in those repos yet.
