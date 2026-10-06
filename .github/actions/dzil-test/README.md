@@ -40,7 +40,19 @@ Alien dist forcing a vendored build:
 |----------------|------------------------------------------------------|---------|
 | `command`      | `test`                                               | dzil command to run (`test`, `build`, …) |
 | `install-type` | *(empty)*                                            | `ALIEN_INSTALL_TYPE` value; `share` forces vendored build |
-| `cpanm-opts`   | `--mirror http://cpan.metacpan.org --mirror-only`    | extra `PERL_CPANM_OPT` |
+| `cpanm-opts`   | `--mirror https://cpan.metacpan.org --mirror-only`   | `PERL_CPANM_OPT` for all cpanm calls |
+
+The default mirror is **https** on purpose: every module the action installs is
+executed in your job, so the download has to be authenticated. `--mirror-only`
+keeps cpanm from falling back to any other index. If you override `cpanm-opts`
+(a private mirror, extra flags), keep the mirror URL on https.
+
+cpanm needs an https-capable fetcher for this — `curl` or `wget`, or the Perl
+modules `LWP::Protocol::https` or `IO::Socket::SSL` + `Net::SSLeay` — plus CA
+certificates. The official `perl:<version>` images (what this repository's own
+CI and the SimpiCI provider run in) and the GitHub-hosted runners are equipped
+for it; on a stripped-down image install `curl` and `ca-certificates` before
+this action.
 
 ## Using on Forgejo / self-hosted Gitea
 

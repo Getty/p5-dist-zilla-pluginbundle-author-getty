@@ -7,6 +7,12 @@
     dist.ini. Set "no_license = 0" to keep the check, or
     "generate_license = 1" to keep the generated file.
 
+  - The shared dzil-test CI action installs from https://cpan.metacpan.org
+    by default (same default as the SimpiCI provider). The runner needs an
+    https-capable cpanm (curl, wget or IO::Socket::SSL, plus CA
+    certificates); the official perl images have that. "cpanm-opts" still
+    overrides the default.
+
 0.326     2026-09-29 17:20:32Z
 
   - Every distribution built with [@Author::GETTY] now snapshots its agent
