@@ -1,0 +1,34 @@
+---
+claimed_at: 2026-10-25T01:49:53Z
+claimed_by: offen-2610
+class: standard
+completed: 2026-10-25T01:49:53Z
+created: 2026-10-06T19:42:11Z
+id: 12
+priority: low
+started: 2026-10-25T01:28:59Z
+status: done
+tags:
+- pod
+- weaver
+- docs
+- review-2026-10-06
+title: Pod::Weaver bundle documents =resource, =event and =seealso content that the
+  transformer does not implement
+updated: 2026-10-25T01:49:53Z
+---
+
+`lib/Pod/Weaver/PluginBundle/Author/GETTY.pm` (COMMANDS, lines 76-131) documents ten custom commands. `lib/Pod/Elemental/Transformer/Author/GETTY.pm:43-58` implements `synopsis`, `description`, `seealso` (head1) and `attr method func opt env hook example` (head2). Differences:
+
+- `=resource` (documented line 76) and `=event` (line 100) are in neither table. They pass through untouched and end up as unknown POD commands in the built module, which is a POD error on MetaCPAN.
+- `=seealso L<Some::Other::Module>` (line 129): the transformer replaces the whole command line with the fixed heading `SEE ALSO` (`Transformer:70-73`), so the link written on the command line is dropped without a word. Only the paragraphs below it survive.
+- The other way round, `=synopsis` and `=description` work but are documented only in the transformer, not in the bundle's COMMANDS list.
+
+No fleet dist uses `=resource`, `=event` or a `=seealso` with content today (grep over `p5-*/lib`), so nothing is broken yet; the docs just promise more than there is.
+
+Done when docs and tables agree: either add `resource` and `event` to `@HEAD2_COMMANDS` with a test, or remove them from the POD; and document `=seealso` as taking no argument.
+
+---
+Fleet review 2026-10-06 · kind: docs · confidence: verified
+
+2026-10-25 01:39 Commit ac01b3e auf offen-2610. Rot gegen altes lib: =resource/=event. Entscheidung: implementiert statt aus der Doku entfernt.
