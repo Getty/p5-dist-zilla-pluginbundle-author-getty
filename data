@@ -1,0 +1,32 @@
+---
+claimed_at: 2026-10-25T01:49:58Z
+claimed_by: offen-2610
+class: standard
+completed: 2026-10-25T01:49:58Z
+created: 2026-10-06T19:42:16Z
+id: 13
+priority: low
+started: 2026-10-25T01:29:05Z
+status: done
+tags:
+- docs
+- pod
+- docker
+- review-2026-10-06
+title: 'POD drift: Docker ''context'' option does not exist, and the ''equivalent
+  to'' listing is out of date'
+updated: 2026-10-25T01:49:58Z
+---
+
+Two places where the POD describes something the code does not do.
+
+1. `lib/Dist/Zilla/PluginBundle/Author/GETTY/Docker.pm:123-125` documents `context` ("Build context path. Passed through to Docker::API unchanged"). The pass-through list at `Docker.pm:44-47` has no `context`, and `Dist::Zilla::Plugin::Docker::API` has no such attribute either (the context is always the build root, `API.pm:336`). A `context = ...` line in a subsection is silently ignored. Remove the entry, or implement it on both sides.
+
+2. The "In default configuration it is equivalent to" block (`GETTY.pm:64-106`) no longer matches `configure()`: it omits `Git::GatherDir` (with `include_dotfiles`, README.md/.karr excludes), `GatherAgentContext` (`:1156`), the removal of `License` from `@Basic` plus `LicenseFile` (`:1167,1173`), `Test::ChangesHasContent` (`:1257`), `Prereqs::FromCPANfile` (`:1355`) and `Git::Push` (`:1388`); and it lists `[Repository]` unconditionally although that is only the fallback (`:1281`).
+
+Also while here: `cpanfile` pins `Dist::Zilla::Plugin::Authority` at 1.006, but the bundle demands `:version = 1.009` at build time (`GETTY.pm:1341`). Raise the pin to 1.009 so an installed bundle cannot meet a too-old Authority.
+
+---
+Fleet review 2026-10-06 · kind: docs · confidence: verified
+
+2026-10-25 01:40 Commit a86f0d3 auf offen-2610. Test nur fuer den Authority-Pin (rot bei 1.006); der Rest ist reine Doku. Entscheidung: context entfernt statt implementiert (Docker::API hat kein Attribut).
