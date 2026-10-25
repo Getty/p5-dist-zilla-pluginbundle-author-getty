@@ -1,0 +1,31 @@
+---
+claimed_at: 2026-10-25T01:50:04Z
+claimed_by: offen-2610
+class: standard
+completed: 2026-10-25T01:50:04Z
+created: 2026-10-06T19:42:21Z
+id: 14
+priority: low
+started: 2026-10-25T01:29:11Z
+status: done
+tags:
+- bundle
+- release
+- no_cpan
+- review-2026-10-06
+title: no_cpan = 1 without docker_image leaves the dist without a Releaser
+updated: 2026-10-25T01:50:04Z
+---
+
+With `no_cpan = 1` the bundle removes `UploadToCPAN` from `@Basic` (`GETTY.pm:1159-1160`) and adds nothing in its place. `Dist::Zilla::Dist::Builder::release` croaks `you can't release without any Releaser plugins` before anything else runs (Dist::Zilla 6.037, `Dist/Zilla/Dist/Builder.pm:583`). So a private dist configured with nothing but `[@Author::GETTY] no_cpan = 1` cannot run `dzil release` at all: no `NextRelease`, no tag, no version bump, no `InstallRelease`. `GitHub::CreateRelease` and `InstallRelease` are AfterRelease plugins, not Releasers.
+
+It only works when the dist brings its own Releaser: `docker_image` (Docker::API is one) or a hand-added `[Run::Release]` (sunriser does that). citiai-core's dist.ini has neither.
+
+Suggestion, untested: add `[FakeRelease]` when `no_cpan` is set and no Docker default is wired, so the release flow (changelog, tag, bump, push) works for private dists out of the box. Document it at `=head2 no_cpan` (`GETTY.pm:266-271`), which today only says that `UploadToCPAN` is disabled.
+
+Related and equally unguarded, not used by any fleet dist today (grep over all dist.ini): `Test::ChangesHasContent` is added unconditionally (`GETTY.pm:1257`), but with `no_changes = 1` the version heading is blanked (`NextRelease.format = ''`, `:1381`) and on the `task`/`manual_version` path there is no `NextRelease` at all (`:1391-1395`), so the generated `xt/release/changes_has_content.t` cannot find a heading for the version and the release tests fail. Worth one test each before somebody needs those paths.
+
+---
+Fleet review 2026-10-06 · kind: improvement · confidence: verified
+
+2026-10-25 01:44 Commit ba49675 auf offen-2610. Rot gegen altes lib belegt. Gemessen (Dist::Zilla::Tester-Build): mit no_changes enthaelt das gebaute Changes keine Versionszeile, mit task bleibt {{$NEXT}} stehen -> der generierte Test findet keinen Header. Entscheidung: ChangesHasContent entfaellt bei no_changes und task; bei manual_version bleibt er (Autor schreibt die Ueberschrift selbst). Also found: POD zu manual_version zeigt 'manual_version = 1.222333', das Attribut ist aber Bool (ein Wert wie 1.222333 wird abgelehnt).
