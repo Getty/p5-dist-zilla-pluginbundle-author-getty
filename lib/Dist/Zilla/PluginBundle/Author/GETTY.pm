@@ -1131,13 +1131,13 @@ sub effective_gather_exclude_filename {
 sub configure {
   my ($self) = @_;
 
-  $self->log_fatal("you must not specify both weaver_config and is_task")
+  die "[\@Author::GETTY] you must not specify both weaver_config and is_task\n"
     if $self->is_task and $self->weaver_config ne '@Author::GETTY';
 
-  $self->log_fatal("you must not specify both author and no_cpan")
+  die "[\@Author::GETTY] you must not specify both author and no_cpan\n"
     if $self->no_cpan and $self->author ne 'GETTY';
 
-  $self->log_fatal("no_install can't be used together with no_makemaker")
+  die "[\@Author::GETTY] no_install can't be used together with no_makemaker\n"
     if $self->no_install and $self->no_makemaker;
 
   die "[\@Author::GETTY] you must not specify both no_license and generate_license\n"

@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+  - The option conflicts (weaver_config with task, author with no_cpan,
+    no_install with no_makemaker) now abort with their own message instead
+    of "Can't locate object method log_fatal".
+
   - The Docker subsection no longer sets build_load or passes release_load
     through: Docker::API has dropped both, as nothing ever read them, and
     would warn on every build. The platform option documents that it takes
