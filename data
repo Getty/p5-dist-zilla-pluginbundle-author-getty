@@ -1,0 +1,34 @@
+---
+claimed_at: 2026-10-25T00:53:23Z
+claimed_by: dist-zilla-pluginbundle-author-getty-worker
+class: standard
+completed: 2026-10-25T00:53:23Z
+created: 2026-10-21T21:42:21Z
+id: 15
+priority: high
+started: 2026-10-21T21:50:44Z
+status: done
+tags:
+- ci
+- simpici
+title: Prebuilt dzil test images per Perl version for the SimpiCI provider
+updated: 2026-10-25T00:53:54Z
+---
+
+Every SimpiCI job installs Dist::Zilla, this bundle and their requirements from scratch: ~219 CPAN modules, ~3 of the ~3.5 minutes per job. Measured on p5-app-codefork (run 39676019408, 2026-10-21): perl:5.40 job 3m26s = image pull 17s, cpanm Dist::Zilla ~1m50s, bundle + authordeps + listdeps ~1m15s, dzil test a few seconds. 12 Perl versions, 2 in parallel -> 22 minutes per push, for every dist on the provider.
+
+Proposal:
+- Build one image per supported Perl version, ghcr.io/getty/dzil-perl:<ver> (FROM perl:<ver>, cpanm Dist::Zilla + Dist::Zilla::PluginBundle::Author::GETTY + its authordeps + the usual author-test deps such as Test::Pod), published by a workflow in this repo: matrix over simpici-provider/perl-versions, on push to main, weekly schedule (fresh CPAN), workflow_dispatch.
+- emit.sh writes the jobs as ghcr.io+getty+dzil-perl+<ver>+test.sh (SimpiCI maps that filename to ghcr.io/getty/dzil-perl:<ver>, job name stays unique per version). dzil-test.sh keeps "dzil authordeps --missing | cpanm" and "dzil listdeps --author --missing | cpanm" - they then only install what the image lacks (the dist own requirements, a newer bundle).
+- Keep .simpici-apt working (the images are Debian-based perl images) and .simpici-perl / SIMPICI_PROVIDER_PERL_VERSIONS unchanged.
+- The GitHub composite action dzil-test can use the same images as container.
+- Check: the images must be public on ghcr so a consuming repo can pull them without credentials.
+Expected: ~20-30s per job instead of ~3.5 min. Verify on a pure-perl consumer (p5-app-codefork) before/after.
+
+2026-10-21 21:59 Worker: Part 1 written (simpici-provider/dzil-perl/{Containerfile,prime.sh}, .github/workflows/dzil-perl-images.yml); Part 2 written (emit.sh -> ghcr.io+getty+dzil-perl+<ver>+test.sh, README, Changes). emit.sh verified incl. .simpici-perl override and SimpiCI plan-only parse (image ghcr.io/getty/dzil-perl:<ver>, job ghcr.io+getty+dzil-perl+<ver>). actionlint + shellcheck clean (except pre-existing intentional SC2086 in helper apt line). prove -lr t/ and dzil test PASS. Local podman builds 5.40 and 5.22 running (docker buildx fails: rootless crun cgroup permission denied).
+
+2026-10-21 22:19 Done, commit-ready, uncommitted. Two disjoint commits: PART 1 (new files) simpici-provider/dzil-perl/Containerfile, simpici-provider/dzil-perl/prime.sh, .github/workflows/dzil-perl-images.yml. PART 2 (existing files) simpici-provider/emit.sh, simpici-provider/README.md, Changes. Verified: sh -n/bash -n; shellcheck 0.11 (container) clean on emit.sh, prime.sh, job file; helper only pre-existing intentional SC2086 on the apt line. emit.sh default/SIMPICI_PROVIDER_PERL_VERSIONS/.simpici-perl paths emit ghcr.io+getty+dzil-perl+<ver>+test.sh; SimpiCI plan-only maps to ghcr.io/getty/dzil-perl:<ver>, job ghcr.io+getty+dzil-perl+<ver>, coexisting with a repo perl+5.40+test.sh (no dupe). actionlint clean; matrix snippet -> ["5.22",...,"5.44"]. prove -lr t/ PASS (166), dzil test PASS. podman builds 5.40 (18m local) and 5.22 (22m local) OK (docker buildx blocked: rootless crun cgroup denied); in both images Dist::Zilla 6.040, bundle 0.326, Test::Pod 1.52, git present; emitted job ran this repo's dzil test PASS in 1m48s (5.40) / 1m34s (5.22), installing only Bootstrap::lib (+Test::More upgrade on 5.40). Ordering: push Part 1, let dzil-perl-images finish, make ghcr.io/getty/dzil-perl public, then push Part 2.
+
+2026-10-21 22:19 Also found (not done, for the dispatcher): (1) card bullet 'dzil-test composite action can use the same images as container' not in this dispatch, untouched. (2) t/ci_mirror_https.t compares only emit.sh with action.yml; the Containerfile's PERL_CPANM_OPT ARG is a third copy, covered only by the no-http scan, not the equality check (test-writer). (3) simpici-provider.yml triggers on simpici-provider/** and so also rebuilds the provider image when only dzil-perl/ changes; harmless, could add '!simpici-provider/dzil-perl/**'. (4) Versions in .simpici-perl / SIMPICI_PROVIDER_PERL_VERSIONS that are not in perl-versions now fail at image pull (they used to pull perl:<ver>); I documented that rather than adding a perl:<ver> fallback. (5) The p5-app-codefork before/after timing from the card still has to be measured on real CI after the push.
+
+2026-10-25 00:53 Koordinator: als d1b1796 (Images) und c782186 (Provider-Jobs) auf main committet, nicht gepusht. Push-Reihenfolge: erst d1b1796, Workflow abwarten, ghcr.io/getty/dzil-perl öffentlich stellen, dann c782186.
