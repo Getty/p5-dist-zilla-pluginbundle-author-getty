@@ -218,7 +218,7 @@ END_TEMPLATE
       text => 'Contributions are welcome! Please fork the repository and submit a pull request.',
     } ],
     [ '@GETTY/Authors',   _exp('Authors'),      {} ],
-    [ '@GETTY/Legal',     _exp('Legal'),        {} ],
+    [ '@GETTY/Legal',     _exp('Author::GETTY::Legal'), {} ],
     [ '@GETTY/List',      _exp('-Transformer'), { 'transformer' => 'List' } ],
     [ '@GETTY/GETTY',     _exp('-Transformer'), { 'transformer' => 'Author::GETTY' } ],
   );

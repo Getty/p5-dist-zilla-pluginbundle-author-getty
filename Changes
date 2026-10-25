@@ -1,5 +1,10 @@
 {{$NEXT}}
 
+  - The link to https://raudssus.de/ is added to the COPYRIGHT AND LICENSE
+    section by the weaver bundle, so copyright_holder can stay plain text and
+    the generated README and LICENSE no longer print "L<...>" markup. A holder
+    that still carries the link is not given it twice.
+
   - The option conflicts (weaver_config with task, author with no_cpan,
     no_install with no_makemaker) now abort with their own message instead
     of "Can't locate object method log_fatal".
