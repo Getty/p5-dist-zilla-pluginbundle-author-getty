@@ -1,0 +1,38 @@
+---
+claimed_at: 2026-10-25T01:49:35Z
+claimed_by: offen-2610
+class: standard
+completed: 2026-10-25T01:49:35Z
+created: 2026-10-06T19:41:56Z
+id: 9
+priority: medium
+started: 2026-10-25T01:28:42Z
+status: done
+tags:
+- bug
+- bundle
+- git
+- review-2026-10-06
+title: GitHub/Gitea auto-detection reads .git/config directly and fails in a git worktree
+updated: 2026-10-25T01:49:35Z
+---
+
+`_has_github_remote` (`lib/Dist/Zilla/PluginBundle/Author/GETTY.pm:749-766`) and `_remote_host` (`:781-798`) open the literal path `.git/config`. In a linked worktree `.git` is a file (`gitdir: ...`), so `-e '.git/config'` is false and the bundle concludes there is no remote at all.
+
+Reproduce (read-only, an existing worktree of a GitHub-hosted dist):
+
+    cd ~/dev/p5-text-treesitter-bash/.claude/worktrees/k6-grammar-once
+    perl -I ~/dev/p5-dist-zilla-pluginbundle-author-getty/lib -MDist::Zilla::PluginBundle::Author::GETTY \
+      -e 'my $b=Dist::Zilla::PluginBundle::Author::GETTY->new(name=>q{@Author::GETTY},payload=>{}); print $b->no_github, $b->no_github_release, $b->_remote_host // q{undef}'
+    # -> 1 1 undef     (main checkout of the same repo: 0 0 github.com)
+
+Effect in a worktree (the fleet works in `.claude/worktrees/` all the time, 32 repos have one): `GithubMeta` is replaced by plain `[Repository]`, so META loses `bugtracker` and `homepage`, the woven SUPPORT section loses its Issues paragraph, and a `dzil release` would silently skip `GitHub::CreateRelease`. A Gitea/Codeberg dist loses `GiteaMeta` the same way. The same applies to a dist that is a submodule.
+
+Second, smaller flaw in the same code: `_remote_host` takes the first `url =` line of the file, whatever remote (or submodule) it belongs to, while `GiteaMeta` reads `remote.origin.url` and requires the hosts to match (`GiteaMeta.pm:107,136`). If the first URL is not origin's, the bundle wires GiteaMeta with a host the plugin then rejects, and the dist gets no repository metadata at all.
+
+Done when: detection asks git (`git config --get-regexp '^remote\..*\.url$'`, or `remote.origin.url` first like GiteaMeta does) instead of parsing `.git/config`, and a test builds the bundle inside a `git worktree` and inside a repo whose first remote is not origin. `t/github_autodetect.t` and `t/gitea_autodetect.t` have the fixtures to extend.
+
+---
+Fleet review 2026-10-06 · kind: bug · confidence: verified
+
+2026-10-25 01:36 Commit 2d06953 auf offen-2610. Rot gegen altes lib belegt. Fixtures sind jetzt echte git-init-Repos (Detektion braucht ein Repo). Also found: Skill dist-zilla-pluginbundle-author-getty-core beschreibt noch das .git/config-Parsen (skilletor-verwaltet, nicht angefasst).
