@@ -179,9 +179,9 @@ sub mvp_bundle_config {
 {{
   my @parts;
 
-  # GitHub Issues first
+  # Issue tracker first
   if ($bugtracker_web) {
-    push @parts, "=head2 Issues\n\nPlease report bugs and feature requests on GitHub at\nL<$bugtracker_web>.";
+    push @parts, "=head2 Issues\n\nPlease report bugs and feature requests at\nL<$bugtracker_web>.";
   }
 
   # IRC support

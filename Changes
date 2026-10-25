@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+  - The SUPPORT section no longer says bugs are reported "on GitHub": the
+    tracker URL may be a Codeberg or Forgejo one, so the sentence just names
+    the link.
+
   - GitHub and Gitea/Forgejo detection asks git for the remotes instead of
     parsing .git/config, so a dist checked out as a linked worktree or a
     submodule keeps GithubMeta/GiteaMeta, the bugtracker metadata and
