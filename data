@@ -1,0 +1,33 @@
+---
+claimed_at: 2026-10-25T01:49:23Z
+claimed_by: offen-2610
+class: standard
+completed: 2026-10-25T01:49:23Z
+created: 2026-10-02T02:57:02Z
+id: 7
+priority: medium
+started: 2026-10-25T01:28:31Z
+status: done
+tags:
+- bundle
+- bug
+title: configure() guards call log_fatal, which the bundle does not have
+updated: 2026-10-25T01:49:23Z
+---
+
+Three guards in configure() (lib/Dist/Zilla/PluginBundle/Author/GETTY.pm, lines 1134-1141) call $self->log_fatal:
+
+- weaver_config together with is_task
+- author together with no_cpan
+- no_install together with no_makemaker
+
+The bundle class has no log_fatal (Dist::Zilla::Role::PluginBundle::Easy does not provide a logger), so each guard dies with "Can't locate object method \"log_fatal\" via package Dist::Zilla::PluginBundle::Author::GETTY" instead of its own message. The build still aborts, but the user never sees why.
+
+Reproduce:
+  perl -Ilib -MDist::Zilla::PluginBundle::Author::GETTY -e 'Dist::Zilla::PluginBundle::Author::GETTY->new(name=>q{@Author::GETTY},payload=>{no_install=>1,no_makemaker=>1})->configure'
+
+Wanted: each guard aborts with its intended message. The no_license/generate_license guard added in 5fec0ba already uses a plain die with a "[@Author::GETTY]" prefix - bring the three in line with it (or give the bundle one small fatal helper and use it for all four). Add a test per guard that asserts on the message; t/license_file.t has the pattern for the fourth.
+
+2026-10-25 01:32 Commit a0bf7c5 auf offen-2610. Rot gegen altes lib belegt (6/6 failed).
+
+2026-10-25 01:46 Zusatzpunkte (a) Commit 005af0b (simpici-provider.yml schliesst dzil-perl aus), (b) Commit c4f6f50 (Containerfile-ARG im Gleichheitstest, rot per Mutation belegt). Also found: PERL5LIB-Hinweis nicht relevant; siehe k14 (manual_version-POD vs Bool) und k9 (Skill-Text .git/config). Suite 205 Tests gruen.
