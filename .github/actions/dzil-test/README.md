@@ -99,5 +99,7 @@ local reference:
 - `dzil install` is intentionally **not** run here; if an Alien dist needs the
   artifact installed before tests, add that step in the caller.
 - `@v1` is the recommended pin: the tag tracks the action's stable major line,
-  so CI is reproducible and only moves forward for compatible changes. Use
-  `@main` instead if you want every change the moment it lands.
+  so CI is reproducible and only moves forward for compatible changes. The
+  maintainer moves the tag when the action changes; until then a change that
+  is on `main` is not yet in `@v1`. `@main` takes every change the moment it
+  lands, in all consuming CI runs at once, so prefer `@v1`.

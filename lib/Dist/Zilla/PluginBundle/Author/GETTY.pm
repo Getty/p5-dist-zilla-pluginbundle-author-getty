@@ -523,6 +523,11 @@ as a C<develop requires>.  Without it, author tests will fail with a missing
 module — do B<not> paper over this by adding C<Test::Pod> to the cpanfile's
 C<on test> block.
 
+Reference the action as C<...dzil-test@v1>, as in the examples below. The
+C<v1> tag is moved by the maintainer when the action changes, so a dist
+pinned to it gets a change only then, and not on the next CI run as with
+C<@main>, where every change lands in all consuming CI runs at once.
+
 =head2 Pure-Perl distributions
 
 A minimal workflow for a pure-Perl dist (no system libraries required):

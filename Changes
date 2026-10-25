@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+  - The CI documentation says when the "v1" tag of the dzil-test action
+    moves, so it is clear that a dist pinned to "@main" gets every change at
+    once while "@v1" gets it when the maintainer moves the tag.
+
   - A "no_cpan" dist gets [FakeRelease] in place of the removed
     UploadToCPAN, so "dzil release" no longer aborts with "can't release
     without any Releaser plugins" and still tags, bumps the version and
