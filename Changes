@@ -1,5 +1,11 @@
 {{$NEXT}}
 
+  - GitHub and Gitea/Forgejo detection asks git for the remotes instead of
+    parsing .git/config, so a dist checked out as a linked worktree or a
+    submodule keeps GithubMeta/GiteaMeta, the bugtracker metadata and
+    GitHub::CreateRelease. The host is taken from origin, as GiteaMeta does,
+    not from whichever remote is listed first.
+
   - The link to https://raudssus.de/ is added to the COPYRIGHT AND LICENSE
     section by the weaver bundle, so copyright_holder can stay plain text and
     the generated README and LICENSE no longer print "L<...>" markup. A holder

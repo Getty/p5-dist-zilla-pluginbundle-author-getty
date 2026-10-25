@@ -742,26 +742,30 @@ has no_github_release => (
   },
 );
 
-# Look at .git/config (relative to the cwd, which dzil sets to the dist root)
-# and return true if any remote URL points at github.com. Used to auto-disable
-# the GitHub-specific plugins when the dist lives somewhere else (GitLab,
+# Remote URLs of the repository around the cwd (which dzil sets to the dist
+# root), origin first, as a list of [ name, url ]. Asks git instead of reading
+# .git/config, so linked worktrees and submodules (where .git is a file) work.
+# Empty when there is no repository, no git, or no remote.
+sub _remote_urls {
+  my @remotes;
+  my $out = `git config --get-regexp '^remote\\..*\\.url\$' 2>/dev/null`;
+  return () if $? != 0 or !defined $out;
+  for my $line (split /\n/, $out) {
+    my ($key, $url) = $line =~ m{^remote\.(.+)\.url\s+(\S+)} or next;
+    push @remotes, [ $key, $url ];
+  }
+  return ( (grep { $_->[0] eq 'origin' } @remotes), (grep { $_->[0] ne 'origin' } @remotes) );
+}
+
+# True if any remote URL points at github.com. Used to auto-disable the
+# GitHub-specific plugins when the dist lives somewhere else (GitLab,
 # Codeberg, a private Gitea, no remote at all, ...).
 has _has_github_remote => (
   is      => 'ro',
   isa     => 'Bool',
   lazy    => 1,
   default => sub {
-    my $config = '.git/config';
-    return 0 unless -e $config;
-    open my $fh, '<', $config or return 0;
-    while (my $line = <$fh>) {
-      if ($line =~ m{^\s*url\s*=.*\bgithub\.com\b}i) {
-        close $fh;
-        return 1;
-      }
-    }
-    close $fh;
-    return 0;
+    return (grep { $_->[1] =~ m{\bgithub\.com\b}i } _remote_urls()) ? 1 : 0;
   },
 );
 
@@ -776,23 +780,16 @@ has gitea => (
 # any per-dist flag: Codeberg (Forgejo) and the author's own instance.
 my @KNOWN_GITEA_HOSTS = qw( codeberg.org src.ci );
 
-# Host of the dist's first git remote (parsed from .git/config in the cwd,
-# which dzil sets to the dist root). Undef when there is no remote.
+# Host of the dist's origin remote, or of the first remote if there is no
+# origin (GiteaMeta reads remote.origin.url and wants the hosts to match).
+# Undef when there is no remote.
 has _remote_host => (
   is      => 'ro',
   isa     => 'Maybe[Str]',
   lazy    => 1,
   default => sub {
-    my $config = '.git/config';
-    return undef unless -e $config;
-    open my $fh, '<', $config or return undef;
-    my $url;
-    while (my $line = <$fh>) {
-      if ($line =~ m{^\s*url\s*=\s*(\S+)}) { $url = $1; last }
-    }
-    close $fh;
-    return undef unless defined $url;
-    my ($host) = $url =~ m{(?: ^\w+:// (?:[^/\@]+\@)? | ^[^/\@]+\@ ) ([^/:]+)}x;
+    my ($remote) = _remote_urls() or return undef;
+    my ($host) = $remote->[1] =~ m{(?: ^\w+:// (?:[^/\@]+\@)? | ^[^/\@]+\@ ) ([^/:]+)}x;
     return $host;
   },
 );
