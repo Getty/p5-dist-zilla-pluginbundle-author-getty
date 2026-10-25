@@ -1,5 +1,10 @@
 {{$NEXT}}
 
+  - The Docker subsection no longer sets build_load or passes release_load
+    through: Docker::API has dropped both, as nothing ever read them, and
+    would warn on every build. The platform option documents that it takes
+    exactly one value.
+
   - New "no_license" attribute: the bundle neither generates a LICENSE nor
     demands a committed one. "no_cpan" now implies it, so a private dist no
     longer aborts with "no LICENSE in the distribution". A LICENSE that is

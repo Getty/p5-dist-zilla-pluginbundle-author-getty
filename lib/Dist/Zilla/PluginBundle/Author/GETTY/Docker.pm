@@ -34,7 +34,6 @@ sub configure {
   my %plugin_args = (
     image        => $image,
     tag          => $tags,
-    build_load   => 1,
     release_push => $local ? 0 : 1,
   );
 
@@ -42,7 +41,7 @@ sub configure {
   $plugin_args{_network_mode} = $payload->{network_mode} if defined $payload->{network_mode};
 
   for my $k (qw(
-    dockerfile build_arg label platform release_load build_verbose
+    dockerfile build_arg label platform build_verbose
     pull no_cache rm force_rm fail_if_tag_exists skip_latest_on_trial
   )) {
     $plugin_args{$k} = $payload->{$k} if exists $payload->{$k};
@@ -135,9 +134,10 @@ Image label. Multi-value.
 
 =head2 platform
 
-Target platform (C<--platform>). Multi-value.
+Target platform (C<--platform>), exactly one. A second value is refused by
+C<Docker::API>: its build endpoint takes one platform.
 
-=head2 release_load, build_verbose, pull, no_cache, rm, force_rm, fail_if_tag_exists, skip_latest_on_trial
+=head2 build_verbose, pull, no_cache, rm, force_rm, fail_if_tag_exists, skip_latest_on_trial
 
 Passed through directly to L<Dist::Zilla::Plugin::Docker::API>.
 
