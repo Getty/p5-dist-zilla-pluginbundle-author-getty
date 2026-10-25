@@ -1,5 +1,15 @@
 {{$NEXT}}
 
+  - A "no_cpan" dist gets [FakeRelease] in place of the removed
+    UploadToCPAN, so "dzil release" no longer aborts with "can't release
+    without any Releaser plugins" and still tags, bumps the version and
+    pushes. It is left out when the dist has a Releaser of its own (the
+    default Docker subsection or run_release).
+
+  - Test::ChangesHasContent is no longer added with "no_changes" or "task":
+    there is no version heading in Changes then, so its release test could
+    only fail.
+
   - The documentation matches the code: the "equivalent to" listing shows
     the plugins configure() really assembles, and the Docker subsection no
     longer documents a "context" option that was never passed on. The

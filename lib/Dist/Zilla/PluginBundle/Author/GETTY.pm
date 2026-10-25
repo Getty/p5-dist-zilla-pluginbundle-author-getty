@@ -269,7 +269,7 @@ hosts. Has no effect when a GitHub remote is present (GitHub wins).
 
 If set to 1, L<Dist::Zilla::Plugin::GitHub::CreateRelease> will not be used
 even though GitHub integration is otherwise active. Like L</no_github>, this
-defaults to 1 when no GitHub remote is detected in F<.git/config>.
+defaults to 1 when no GitHub remote is detected in the repository's remotes.
 
 When this option is B<not> set (the default), C<dzil release> will create a
 GitHub Release for the new tag and attach the CPAN tarball. This requires a
@@ -283,12 +283,22 @@ identity files).
 If set to 1, this attribute will disable L<Dist::Zilla::Plugin::UploadToCPAN>.
 By default a dzil release would release to L<CPAN|http://www.cpan.org/>.
 
+Dist::Zilla refuses to release without a Releaser plugin, so the bundle adds
+L<Dist::Zilla::Plugin::FakeRelease> in its place, which lets C<dzil release>
+run the rest of the flow (changelog, tag, version bump, push). It is left out
+when the dist brings a Releaser of its own: the default Docker subsection
+(L</docker_image>) or C<run_release>. A Releaser you add by hand to your
+F<dist.ini> is not seen by the bundle, so if you do that, you will have the
+fake one as well.
+
 It also makes B<version_finder> default to C<:MainModule>.
 
 =head2 no_changes
 
 If set to 1, then L<Dist::Zilla::Plugin::NextRelease> (from @Git::VersionManager)
-will not generate changes entries.
+will not generate changes entries. As the version heading is then blank,
+L<Dist::Zilla::Plugin::Test::ChangesHasContent> is left out as well; it is
+also left out for a C<task>, which has no NextRelease either.
 
 =head2 commit_files_after_release
 
@@ -1140,6 +1150,14 @@ sub effective_gather_exclude_filename {
   return [ grep { !$seen{$_}++ } @exclude ];
 }
 
+# True when docker_image makes the bundle add the default Docker subsection.
+sub _docker_default {
+  my ($self) = @_;
+  return defined $self->payload->{docker_image}
+    && length $self->payload->{docker_image}
+    && ($self->payload->{docker_default} // 1);
+}
+
 sub configure {
   my ($self) = @_;
 
@@ -1266,8 +1284,13 @@ sub configure {
     MetaConfig
     MetaJSON
     PodSyntaxTests
-    Test::ChangesHasContent
   ));
+
+  # The generated test looks for a heading of the version being released in
+  # Changes. NextRelease writes it, but not with no_changes (blank format) and
+  # not for a task (no NextRelease), so the test could only fail there.
+  $self->add_plugins('Test::ChangesHasContent')
+    unless $self->no_changes || $self->is_task;
 
   $self->add_plugins([
     'MetaProvides::Package' => {
@@ -1358,6 +1381,14 @@ sub configure {
     ]);
   }
 
+  # @Basic's UploadToCPAN is the Releaser that no_cpan removes, and
+  # Dist::Zilla refuses to release without any Releaser. Unless the dist
+  # brings its own (the Docker default, or run_release), fake one so the rest
+  # of the flow (changelog, tag, version bump, push) runs.
+  if ($self->no_cpan && !$self->_docker_default && !@{ $self->run_release }) {
+    $self->add_plugins('FakeRelease');
+  }
+
   $self->add_plugins([
     'Git::CheckFor::CorrectBranch' => {
       release_branch => $self->release_branch,
@@ -1421,9 +1452,7 @@ sub configure {
   # Releaser without any extra config. Users who want multiple targets via
   # explicit [@Author::GETTY::Docker / name] subsections can opt out with
   # docker_default = 0 to suppress the auto-default.
-  if (defined $self->payload->{docker_image}
-      && length $self->payload->{docker_image}
-      && ($self->payload->{docker_default} // 1)) {
+  if ($self->_docker_default) {
     $self->add_bundle('@Author::GETTY::Docker' => {});
   }
 }
