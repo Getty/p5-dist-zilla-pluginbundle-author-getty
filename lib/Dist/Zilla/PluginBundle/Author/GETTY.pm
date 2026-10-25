@@ -63,20 +63,32 @@ are default):
 
 In default configuration it is equivalent to:
 
+  [Git::GatherDir]
+  include_dotfiles = 0
+  exclude_filename = README.md ; unless include_readme
+  exclude_filename = .karr     ; unless no_cpan
+
+  [GatherAgentContext]
+
   [@Filter]
   -bundle = @Basic
   -remove = GatherDir
   -remove = PruneCruft
+  -remove = License ; LICENSE is committed, see generate_license
 
-  [PkgVersion]
+  [LicenseFile]     ; checks the committed LICENSE against dist.ini
+
   [MetaConfig]
   [MetaJSON]
+  [PodSyntaxTests]
+  [Test::ChangesHasContent]
   [MetaProvides::Package]
   inherit_version = 1
   inherit_missing = 1
   meta_noindex    = 1
-  [PodSyntaxTests]
-  [GithubMeta]
+
+  [GithubMeta]      ; with a GitHub remote; a Gitea/Forgejo remote gets
+                    ; [Author::GETTY::GiteaMeta], anything else [Repository]
 
   [InstallRelease]
   install_command = cpanm .
@@ -87,20 +99,23 @@ In default configuration it is equivalent to:
   do_munging = 0
   do_metadata = 1
 
-  [PodWeaver]
-  config_plugin = @Author::GETTY
-
-  [Repository]
-
   [Git::CheckFor::CorrectBranch]
   release_branch = main
 
+  [Prereqs::FromCPANfile]
+
+  [PodWeaver]
+  config_plugin = @Author::GETTY
+
   [@Git::VersionManager]
-  ; handles versioning, changelog (NextRelease), commits, tags, and push
+  ; handles versioning, changelog (NextRelease), commits, tags
   post-release commit.allow_dirty_match = ^bin/
   ; ... the bundle adds this on top of the ^lib/.*\.pm$ default
 
-  [GitHub::CreateRelease]
+  [Git::Push]
+  push_to = origin
+
+  [GitHub::CreateRelease]   ; with a GitHub remote
   branch     = main
   notes_from = ChangeLog
   ; notes_file defaults to "Changes" when notes_from = ChangeLog

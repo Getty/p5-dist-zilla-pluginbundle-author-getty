@@ -1,5 +1,11 @@
 {{$NEXT}}
 
+  - The documentation matches the code: the "equivalent to" listing shows
+    the plugins configure() really assembles, and the Docker subsection no
+    longer documents a "context" option that was never passed on. The
+    cpanfile requires Dist::Zilla::Plugin::Authority 1.009, the version the
+    bundle demands at build time.
+
   - The documented POD commands =resource and =event now work (they were
     passed through as unknown commands and broke POD on MetaCPAN), and the
     docs say that =seealso, =synopsis and =description take no argument.

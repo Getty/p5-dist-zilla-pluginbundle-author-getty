@@ -5,7 +5,7 @@ requires 'Dist::Zilla', '6.037';
 requires 'Dist::Zilla::Plugin::Alien', '0.024';
 requires 'Dist::Zilla::Plugin::AlienBuild', '0.33';
 requires 'Dist::Zilla::Plugin::Docker::API', '0.104';
-requires 'Dist::Zilla::Plugin::Authority', '1.006';
+requires 'Dist::Zilla::Plugin::Authority', '1.009';
 requires 'Dist::Zilla::Plugin::Deprecated', '0.007';
 requires 'Dist::Zilla::Plugin::GatherAgentContext', '0.001';
 requires 'Dist::Zilla::Plugin::Git::CheckFor::CorrectBranch', '0.014';

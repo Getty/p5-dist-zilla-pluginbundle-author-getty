@@ -119,10 +119,6 @@ Optional Docker C<--network> mode for the build.
 
 Path to the Dockerfile. Passed through to C<Docker::API> unchanged.
 
-=head2 context
-
-Build context path. Passed through to C<Docker::API> unchanged.
-
 =head2 build_arg
 
 Build-time argument (C<--build-arg>). Multi-value — repeat the key to set
