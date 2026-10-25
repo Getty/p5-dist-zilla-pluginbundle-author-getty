@@ -1,0 +1,31 @@
+---
+claimed_at: 2026-10-25T01:49:47Z
+claimed_by: offen-2610
+class: standard
+completed: 2026-10-25T01:49:47Z
+created: 2026-10-06T19:42:06Z
+id: 11
+priority: low
+started: 2026-10-25T01:28:53Z
+status: done
+tags:
+- pod
+- weaver
+- gitea
+- review-2026-10-06
+title: SUPPORT section tells Gitea/Codeberg users to report bugs 'on GitHub
+updated: 2026-10-25T01:49:47Z
+---
+
+`lib/Pod/Weaver/PluginBundle/Author/GETTY.pm:183-185` writes, whenever a bugtracker URL is known:
+
+    Please report bugs and feature requests on GitHub at L<$bugtracker_web>.
+
+Since the bundle got `Author::GETTY::GiteaMeta`, `bugtracker.web` is also set for Gitea/Forgejo/Codeberg dists (`GiteaMeta.pm:174`), so their woven POD reads "on GitHub at https://codeberg.org/...". Affected today: p5-www-gitea (origin `git@codeberg.org:getty/p5-www-gitea.git`), and every dist that moves to src.ci.
+
+Done when the sentence does not name a forge it cannot know (drop "on GitHub", or derive the name from the URL host), with a test next to the existing weaver/GiteaMeta tests.
+
+---
+Fleet review 2026-10-06 · kind: bug · confidence: verified
+
+2026-10-25 01:37 Commit 5efd38b auf offen-2610. Rot gegen altes lib belegt. Entscheidung: Forge-Name entfällt (kein Host-Mapping).
