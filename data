@@ -1,0 +1,34 @@
+---
+claimed_at: 2026-10-25T01:49:41Z
+claimed_by: offen-2610
+class: standard
+completed: 2026-10-25T01:49:41Z
+created: 2026-10-06T19:42:01Z
+id: 10
+priority: medium
+started: 2026-10-25T01:28:48Z
+status: done
+tags:
+- ci
+- fleet
+- action
+- review-2026-10-06
+title: 'Fleet: 16 repos consume dzil-test@main although the bundle documents @v1'
+updated: 2026-10-25T01:49:41Z
+---
+
+k2 (done) cut the `v1` tag and changed the recommended reference in the module POD (`GETTY.pm:527,544,555,569,590`) and `.github/actions/dzil-test/README.md` to `...dzil-test@v1` (commit 391a885, 2026-09-02). No consumer followed: `grep -rhoE 'dzil-test@\S+' ~/dev/*/.github/workflows/*.yml` gives 23 references, all `@main`, none `@v1`.
+
+Affected repos (checked 2026-10-06): p5-airlock, p5-alien-libgit2, p5-dist-zilla-plugin-licensefile, p5-git-libgit2, p5-git-native, p5-kubernetes-comb, p5-kubernetes-comb-svg, p5-net-async-authentik, p5-net-async-keycloak, p5-text-nunjucks, p5-www-authentik, p5-www-idrac, p5-www-keycloak, sick, sick-target-ciscosb, simpici.
+
+So every change to the action still lands in all of their CI runs at once, which is what the tag was cut to stop. Decide one form and make both sides agree: either move the consumers to `@v1` (and move the tag when the action changes, see the HTTP-mirror card), or take the `@v1` recommendation back out of the POD and README.
+
+Other things the same sweep looked at, over all 61 `p5-*` dists that use `[@Author::GETTY]`, and found in order: `.build/` and `*.tar.gz` ignored everywhere, `{{$NEXT}}` present in every `Changes`, `LICENSE` committed everywhere, `cpanfile` present everywhere. Isolated deviations only:
+- build directory `Dist-Name-<version>/` not ignored: p5-www-forgejo, p5-mcp-arcraiders (their `.gitignore` has `*.tar.gz` and `.build/` but no `/WWW-Forgejo-*` / `/MCP-ArcRaiders-*` line).
+- no `copyright_year` in dist.ini: p5-mcp-arcraiders. Its committed LICENSE embeds the year, so `[LicenseFile]` will abort its build from 2027-01-01 on (see the card on the LicenseFile board).
+- the outdated `raudss.us` strings are already listed in k8.
+
+---
+Fleet review 2026-10-06 · kind: hygiene · confidence: verified
+
+2026-10-25 01:45 Commit 26aaa36 auf offen-2610 (reine Doku, daher kein neuer Test). Entscheidung: @v1-Empfehlung bleibt, Doku erklaert das Verhalten von @v1 vs @main. Fremde Repos NICHT angefasst. Auf @v1 umzustellen (24 Referenzen @main in 17 Repos, Stand heute, Karte nannte 16): p5-airlock p5-alien-libgit2 p5-data-coloured p5-dist-zilla-plugin-licensefile p5-git-libgit2 p5-git-native p5-kubernetes-comb p5-kubernetes-comb-svg p5-net-async-authentik p5-net-async-keycloak p5-text-nunjucks p5-www-authentik p5-www-idrac p5-www-keycloak sick sick-target-ciscosb simpici. ACHTUNG fuer den Koordinator: das Tag v1 liegt auf ed4638a und ist hinter main (u.a. b9ed575 https-Mirror-Default). Vor der Umstellung muss v1 nach dem Merge auf den neuen Stand verschoben und gepusht werden (git tag -f v1 <commit>; git push -f origin v1) - das habe ich nicht getan (kein Push, Tag liegt im geteilten Repo). Ausserdem Fleet-Funde der Karte: .gitignore ohne Build-Verzeichnis in p5-www-forgejo, p5-mcp-arcraiders; copyright_year fehlt in p5-mcp-arcraiders.
