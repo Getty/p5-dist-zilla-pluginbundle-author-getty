@@ -126,9 +126,17 @@ Documents usage examples.
 
 Documents related modules or links.
 
-  =seealso L<Some::Other::Module>
+  =seealso
 
-  Related functionality for X.
+  L<Some::Other::Module> - related functionality for X.
+
+C<=seealso> takes no argument: the command line is replaced by the fixed
+heading C<SEE ALSO>, so put the links in the paragraphs below it.
+
+=head2 =synopsis and =description
+
+C<=synopsis> and C<=description> become C<=head1 SYNOPSIS> and
+C<=head1 DESCRIPTION>; like C<=seealso> they take no argument.
 
 =head1 STANDARD SECTIONS
 

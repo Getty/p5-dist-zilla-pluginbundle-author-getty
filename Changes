@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+  - The documented POD commands =resource and =event now work (they were
+    passed through as unknown commands and broke POD on MetaCPAN), and the
+    docs say that =seealso, =synopsis and =description take no argument.
+
   - The SUPPORT section no longer says bugs are reported "on GitHub": the
     tracker URL may be a Codeberg or Forgejo one, so the sentence just names
     the link.

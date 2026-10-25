@@ -24,7 +24,8 @@ sections), so documentation stays close to the code it documents.
 =for :list
 * C<=synopsis> - transforms to C<=head1 SYNOPSIS>
 * C<=description> - transforms to C<=head1 DESCRIPTION>
-* C<=seealso> - transforms to C<=head1 SEE ALSO>
+* C<=seealso> - transforms to C<=head1 SEE ALSO>; the command line is replaced by
+  the heading, so it takes no argument
 
 =head2 Inline Commands (transform to C<=head2>)
 
@@ -36,6 +37,8 @@ sections), so documentation stays close to the code it documents.
 * C<=env> - for documenting environment variables
 * C<=hook> - for documenting hooks
 * C<=example> - for documenting examples
+* C<=resource> - for documenting resources, features or API endpoints
+* C<=event> - for documenting events
 
 =cut
 
@@ -55,6 +58,8 @@ my @HEAD2_COMMANDS = qw(
   env
   hook
   example
+  resource
+  event
 );
 
 my %IS_HEAD2_COMMAND = map { $_ => 1 } @HEAD2_COMMANDS;
