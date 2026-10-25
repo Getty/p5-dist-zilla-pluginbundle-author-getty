@@ -80,4 +80,11 @@ if ($emit->is_file) {
   is $twin, $default, 'SimpiCI provider and action share the same cpanm default';
 }
 
+# And the dzil-perl image's build ARG is the third copy of that default.
+my $containerfile = $root->child('simpici-provider', 'dzil-perl', 'Containerfile');
+if ($containerfile->is_file) {
+  my ($arg) = $containerfile->slurp_utf8 =~ m{^ARG\s+PERL_CPANM_OPT="([^"]*)"}m;
+  is $arg, $default, 'dzil-perl Containerfile ARG shares the cpanm default';
+}
+
 done_testing;
