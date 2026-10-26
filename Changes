@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.327     2026-10-26 00:40:01Z
 
   - The CI documentation says when the "v1" tag of the dzil-test action
     moves, so it is clear that a dist pinned to "@main" gets every change at
