@@ -122,7 +122,11 @@ In default configuration it is equivalent to:
 
 If the C<task> argument is given to the bundle, PodWeaver is replaced with
 TaskWeaver and AutoVersion is used for versioning (instead of
-@Git::VersionManager). You can also give a bigger major version with C<version>:
+@Git::VersionManager). L<Dist::Zilla::Plugin::NextRelease> stamps F<Changes>
+with the version and the UTC release time exactly like it does with
+@Git::VersionManager, before @Git commits it, and
+L<Dist::Zilla::Plugin::Test::ChangesHasContent> checks it (unless
+C<no_changes> is set). You can also give a bigger major version with C<version>:
 
   [@Author::GETTY]
   task = 1
@@ -295,10 +299,10 @@ It also makes B<version_finder> default to C<:MainModule>.
 
 =head2 no_changes
 
-If set to 1, then L<Dist::Zilla::Plugin::NextRelease> (from @Git::VersionManager)
-will not generate changes entries. As the version heading is then blank,
-L<Dist::Zilla::Plugin::Test::ChangesHasContent> is left out as well; it is
-also left out for a C<task>, which has no NextRelease either.
+If set to 1, then L<Dist::Zilla::Plugin::NextRelease> (from @Git::VersionManager,
+or the one a C<task> adds itself) will not generate changes entries. As the
+version heading is then blank, L<Dist::Zilla::Plugin::Test::ChangesHasContent>
+is left out as well.
 
 =head2 commit_files_after_release
 
@@ -1292,10 +1296,10 @@ sub configure {
   ));
 
   # The generated test looks for a heading of the version being released in
-  # Changes. NextRelease writes it, but not with no_changes (blank format) and
-  # not for a task (no NextRelease), so the test could only fail there.
+  # Changes. NextRelease writes it (for a task too, see below), but not with
+  # no_changes (blank format), so the test could only fail there.
   $self->add_plugins('Test::ChangesHasContent')
-    unless $self->no_changes || $self->is_task;
+    unless $self->no_changes;
 
   $self->add_plugins([
     'MetaProvides::Package' => {
@@ -1402,7 +1406,20 @@ sub configure {
 
   $self->add_plugins('Prereqs::FromCPANfile');
 
-  # NextRelease is handled by @Git::VersionManager
+  # NextRelease is handled by @Git::VersionManager, except for a task, which
+  # uses @Git: it stamps Changes here, with the same format and time zone as
+  # @Git::VersionManager (changes_version_columns 10). It has to come before
+  # @Git, so that its Git::Commit sees the stamped Changes (allow_dirty), and
+  # before GitHub::CreateRelease, which reads the release notes from Changes.
+  if ($self->is_task && !$self->no_changes) {
+    $self->add_plugins([
+      'NextRelease' => {
+        ':version' => '5.033',
+        time_zone  => 'UTC',
+        format     => q<%-8v  %{yyyy-MM-dd HH:mm:ss'Z'}d%{ (TRIAL RELEASE)}T>,
+      }
+    ]);
+  }
 
   if ($self->is_task) {
     $self->add_plugins('TaskWeaver');

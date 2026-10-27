@@ -1,5 +1,10 @@
 {{$NEXT}}
 
+  - A "task" dist stamps Changes with [NextRelease] in the same format and
+    UTC time as the other dists, ahead of @Git, so the stamped Changes is
+    committed with the release and GitHub::CreateRelease finds its notes.
+    Test::ChangesHasContent checks it again (not with "no_changes").
+
 0.327     2026-10-26 00:40:01Z
 
   - The CI documentation says when the "v1" tag of the dzil-test action
