@@ -1,0 +1,15 @@
+---
+class: standard
+created: 2026-10-31T17:26:35Z
+id: 16
+priority: low
+status: backlog
+tags:
+- build
+- pod
+title: 'Build without a GitHub/IRC remote: empty =head1 SUPPORT in every built file,
+  and ''git: svn is not a git command'' noise'
+updated: 2026-10-31T17:26:35Z
+---
+
+Seen building OCP (no_cpan = 1, @Author::GETTY 0.328) from a git archive copy with no remote: (1) the Pod::Weaver SUPPORT section (lib/Pod/Weaver/PluginBundle/Author/GETTY.pm, $support_template) renders nothing when there is neither a bugtracker_web nor an IRC resource, but the GenerateSection plugin still emits the heading, so every built .pm carries an empty =head1 SUPPORT that podchecker flags; (2) with no github remote the bundle adds [Repository] (Dist::Zilla::PluginBundle::Author::GETTY, no_github auto-set to 1), and Dist::Zilla::Plugin::Repository falls back to `git svn info` (Repository.pm line 124), which prints "git: svn is not a git command" on stderr. With a github origin remote in .git/config both are gone (verified: same tree, git remote add origin, dzil build clean, SUPPORT has Issues, podchecker OK). So OCP needs no change. Wish: omit the SUPPORT section when the template is empty (conditional section), and optionally stop the svn probe noise (e.g. pass a repository url or skip Repository when no remote). Found under OCP k365.
