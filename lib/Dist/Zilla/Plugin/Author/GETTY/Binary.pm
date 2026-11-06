@@ -2,9 +2,14 @@ package Dist::Zilla::Plugin::Author::GETTY::Binary;
 # ABSTRACT: Declare one standalone binary of the distribution in META.json
 our $VERSION = '0.328';
 use Moose;
-with 'Dist::Zilla::Role::MetaProvider';
+with 'Dist::Zilla::Role::MetaProvider',
+     'Dist::Zilla::Role::AfterBuild',
+     'Dist::Zilla::Role::BeforeRelease';
 
 use Carp ();
+use Cwd ();
+use File::Spec ();
+use Path::Tiny ();
 
 my @PLATFORMS = qw( linux-x86_64 linux-arm64 macos-arm64 macos-x86_64 windows-x86_64 );
 
@@ -85,6 +90,83 @@ sub metadata {
   }
 
   return { x_binaries => { %dist_wide, binaries => { $self->binary_name => \%bin } } };
+}
+
+# The line rule for the output of pp_args (ruling R4), the same as in the
+# binary workflow's pp-args.pl: split on "\n" only, strip one trailing "\r" per
+# line, drop empty lines. A line is one argument and is never word-split.
+sub _pp_args_lines {
+  my ($output) = @_;
+  return grep { length } map { s/\r\z//r } split /\n/, $output;
+}
+
+sub _find_pp {
+  for my $dir (File::Spec->path) {
+    my $pp = File::Spec->catfile($dir, 'pp');
+    return $pp if -f $pp && -x _;
+  }
+  return;
+}
+
+# Runs in the build root; dies naming the command when it fails.
+sub _in_dir {
+  my ($dir, $code) = @_;
+  my $start = Cwd::getcwd();
+  chdir $dir or Carp::croak("cannot chdir to $dir: $!");
+  my @r = eval { $code->() };
+  my $err = $@;
+  chdir $start or Carp::croak("cannot chdir back to $start: $!");
+  die $err if $err;
+  return @r;
+}
+
+sub after_build {
+  my ($self, $arg) = @_;
+  return if $ENV{DZIL_BINARY_SKIP};
+
+  my $name = $self->binary_name;
+  my $pp   = _find_pp()
+    or $self->log_fatal("pp not found in PATH: install PAR::Packer, or set DZIL_BINARY_SKIP=1 to skip the local check of binary $name");
+
+  my $build = Path::Tiny::path($arg->{build_root})->absolute->stringify;
+  my $sib   = "$build-binaries";
+  Path::Tiny::path($sib)->mkpath;
+  my $out = "$sib/$name";
+
+  _in_dir($build, sub {
+    my @extra;
+    if (defined $self->pp_args) {
+      open my $ph, '-|', 'sh', '-c', $self->pp_args
+        or $self->log_fatal("cannot run binary_pp_args of $name: $!");
+      my $output = do { local $/; <$ph> };
+      close $ph or $self->log_fatal("binary_pp_args of $name failed: " . $self->pp_args);
+      @extra = _pp_args_lines($output // '');
+    }
+    my @cmd = ( $pp, '-o', $out, '-I', "$build/lib",
+      ( map { ('-M', $_) } @{ $self->modules } ), @extra, "$build/" . $self->script );
+    $self->log("packing $name");
+    local $ENV{PAR_VERBATIM} = 1;
+    system(@cmd) == 0 or $self->log_fatal("pp failed for binary $name (exit " . ($? >> 8) . ")");
+
+    for my $hook (qw( verify smoke )) {
+      my $cmd = $self->$hook;
+      next unless defined $cmd;
+      $self->log("$hook $name");
+      system('sh', '-c', "$cmd \"\$@\"", 'sh', $out) == 0
+        or $self->log_fatal("binary_$hook failed for $name: $cmd");
+    }
+  });
+}
+
+my $CALLER = qr{uses:\s*Getty/p5-dist-zilla-pluginbundle-author-getty/\.github/workflows/dzil-binary\.yml\@\S};
+
+sub before_release {
+  my ($self) = @_;
+  my $wf = Path::Tiny::path($self->zilla->root)->child('.github', 'workflows', 'binaries.yml');
+  $self->log_fatal("release refused: .github/workflows/binaries.yml is missing; the dist declares binaries and needs a caller of dzil-binary.yml")
+    unless $wf->is_file;
+  $self->log_fatal("release refused: .github/workflows/binaries.yml does not call Getty/p5-dist-zilla-pluginbundle-author-getty/.github/workflows/dzil-binary.yml\@<ref>")
+    unless $wf->slurp_utf8 =~ $CALLER;
 }
 
 __PACKAGE__->meta->make_immutable;

@@ -21,6 +21,14 @@
     committed with the release and GitHub::CreateRelease finds its notes.
     Test::ChangesHasContent checks it again (not with "no_changes").
 
+  - A dist with "binary" keys now packs each declared binary with pp during
+    "dzil build" and runs its verify and smoke commands on the result, so a
+    broken binary fails locally instead of in the release workflow. "dzil
+    release" requires .github/workflows/binaries.yml calling the shared
+    dzil-binary.yml and dies without it. The dzil-test action sets
+    DZIL_BINARY_SKIP=1, so CI builds skip the pp step. Dists without
+    "binary" keys are unchanged.
+
 0.327     2026-10-26 00:40:01Z
 
   - The CI documentation says when the "v1" tag of the dzil-test action
