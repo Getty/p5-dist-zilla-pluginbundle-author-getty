@@ -29,6 +29,13 @@
     DZIL_BINARY_SKIP=1, so CI builds skip the pp step. Dists without
     "binary" keys are unchanged.
 
+  - Build-leg helper scripts for the shared binary release workflow live in
+    .github/dzil-binary (plan.pl, pp-args.pl, require-gate.pl, lib-gate.pl).
+    They plan the platform legs, assemble the pp command line, gate the
+    packed binary on its declared requirements and fail it when it links a
+    shared library other than the system ones or needs a glibc newer than
+    2.28. No effect on dists without "binary" keys.
+
 0.327     2026-10-26 00:40:01Z
 
   - The CI documentation says when the "v1" tag of the dzil-test action
