@@ -44,6 +44,18 @@
     %LOCALAPPDATA%\Programs\<dist name>. No effect on dists without "binary"
     keys.
 
+  - The shared binary release workflow .github/workflows/dzil-binary.yml
+    (workflow_call, inputs "tag" and "bundle_ref") builds the binaries a
+    dist declares on every platform leg with a packing perl of its own
+    (.github/dzil-binary/build-perl.sh) and the leg phases of
+    .github/dzil-binary/build-leg.sh, gates and verifies them, smoke-tests
+    them on clean images and runners, and attaches them with SHA256SUMS,
+    install.sh and install.ps1 to the GitHub release. An empty "tag" is a
+    probe run that builds the checked-out commit and touches no release;
+    its version slot is "probe-<sha7>". A dist calls it from
+    .github/workflows/binaries.yml at @binary-v1. No effect on dists
+    without "binary" keys.
+
 0.327     2026-10-26 00:40:01Z
 
   - The CI documentation says when the "v1" tag of the dzil-test action
