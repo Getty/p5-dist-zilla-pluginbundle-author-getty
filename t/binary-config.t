@@ -289,4 +289,44 @@ my $BUNDLE = "[\@Author::GETTY]\nno_github = 0\nno_github_release = 0\n";
     "remote_forcing: a non-GitHub fabricated remote drops the release plugin";
 }
 
+# I1: subsection-only config (no binary key) must hit the same R3 croak
+{
+  my $sub = "binary_default = 0\n\n[\@Author::GETTY::Binary / x]\n";
+  for my $case (
+    [ 'no_github_release = 1', "[\@Author::GETTY]\nno_github_release = 1\n$sub", {} ],
+    [ 'no GitHub remote',      "[\@Author::GETTY]\n$sub", { remote => undef } ],
+  ) {
+    my ($name, $ini, %o) = ($case->[0], $case->[1], %{ $case->[2] });
+    my ($tzil, $err) = build_dist($ini, scripts => ['bin/x'], build => 0, %o);
+    like $err // '', qr/needs the GitHub release/, "subsection_only_needs_release: $name croaks";
+  }
+  my ($tzil, $err) = build_dist("$BUNDLE$sub", scripts => ['bin/x']);
+  is $err, undef, 'subsection_only_needs_release: GitHub remote builds' or diag $err;
+  my $x = $tzil && x_binaries($tzil) || {};
+  is_deeply [sort keys %{ $x->{binaries} || {} }], ['x'],
+    'subsection_only_needs_release: x_binaries written for the subsection binary';
+}
+
+# I3: platforms and prepare are dist-wide
+{
+  my ($tzil, $err) = build_dist(
+    "$BUNDLE" . "binary = foo\nbinary = bar\nbinary_platforms = linux-x86_64 macos-arm64\n"
+      . "binary_prepare = scripts/p.sh\n",
+    scripts => ['bin/foo', 'bin/bar']);
+  is $err, undef, 'dist_wide: builds' or diag $err;
+  my $x = $tzil && x_binaries($tzil) || {};
+  is_deeply $x->{platforms}, [qw(linux-x86_64 macos-arm64)], 'dist_wide: platforms exactly the declared two';
+  is $x->{prepare}, 'scripts/p.sh', 'dist_wide: prepare once at top level';
+  ok !exists $x->{binaries}{$_}{prepare} && !exists $x->{binaries}{$_}{platforms},
+    "dist_wide: neither prepare nor platforms inside binaries.$_" for qw(foo bar);
+}
+for my $k (['platforms', 'linux-x86_64', qr/platforms.*binary_platforms/s],
+           ['prepare',   'scripts/p.sh', qr/prepare.*binary_prepare/s]) {
+  my ($key, $val, $re) = @$k;
+  my ($tzil, $err) = build_dist(
+    "$BUNDLE" . "binary_default = 0\n\n[\@Author::GETTY::Binary / x]\n$key = $val\n",
+    scripts => ['bin/x'], build => 0);
+  like $err // '', $re, "dist_wide: subsection $key croaks naming binary_$key";
+}
+
 done_testing;

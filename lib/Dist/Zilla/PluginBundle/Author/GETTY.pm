@@ -1182,8 +1182,7 @@ sub _binary_defaults {
   for my $k (qw( modules require platforms pp_args verify smoke prepare )) {
     $d{$k} = $p->{"binary_$k"} if defined $p->{"binary_$k"};
   }
-  $d{has_release} = ($self->no_github || $self->no_github_release) ? 0 : 1
-    if $self->_binaries;
+  $d{has_release} = ($self->no_github || $self->no_github_release) ? 0 : 1;
   return %d;
 }
 

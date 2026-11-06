@@ -56,9 +56,9 @@ sub BUILD {
 }
 
 # Each instance contributes its own binary, keyed by name. The platform list
-# and the prepare command are dist-wide, and CPAN::Meta::Merge refuses a
-# duplicated array, so only the first instance writes them: the platforms of
-# all instances united, and the first prepare that is set.
+# and the prepare command are dist-wide (equal in every instance), and
+# CPAN::Meta::Merge refuses a duplicated array, so only the first instance
+# writes them.
 sub metadata {
   my ($self) = @_;
 
@@ -77,11 +77,10 @@ sub metadata {
   my @all = grep { $_->isa(__PACKAGE__) } @{ $self->zilla->plugins };
   my %dist_wide;
   if ($all[0] == $self) {
-    my %want = map { $_ => 1 } map { @{ $_->platforms } } @all;
-    my ($prepare) = grep { defined } map { $_->prepare } @all;
+    my %want = map { $_ => 1 } @{ $self->platforms };
     %dist_wide = (
       platforms => [ grep { $want{$_} } @PLATFORMS ],
-      defined $prepare ? ( prepare => $prepare ) : (),
+      defined $self->prepare ? ( prepare => $self->prepare ) : (),
     );
   }
 
