@@ -10,6 +10,7 @@ use File::Temp ();
 use File::Find ();
 use File::Spec ();
 use File::Basename ();
+use POSIX ();
 
 our $GLIBC_FLOOR = '2.28';
 
@@ -24,18 +25,19 @@ my %SYSTEM = @SYSTEM;
 sub glob_re {
   my ($g) = @_;
   my $re = join '.*', map { quotemeta } split /\*/, $g, -1;
-  return qr/\A$re\z/;
+  return qr/\A$re\z/i;
 }
 
 # %links: object => [library names]; returns sorted "lib (linked by object)" strings.
 sub violations {
   my ($links, $allowed, $packed) = @_;
   my @re = map { glob_re($_) } @$allowed;
-  my %packed = map { $_ => 1 } @$packed;
+  my %packed = map { lc($_) => 1 } @$packed;
   my @v;
   for my $obj (keys %$links) {
     for my $lib (@{ $links->{$obj} }) {
-      next if $packed{$lib} || grep { $lib =~ $_ } @re;
+      my ($base) = $lib =~ m{([^/\\]+)\z};
+      next if $packed{lc $lib} || (defined $base && $packed{lc $base}) || grep { $lib =~ $_ } @re;
       push @v, "$lib (linked by $obj)";
     }
   }
@@ -82,19 +84,51 @@ sub is_native {
   return $magic =~ /\A(?:\x7fELF|MZ|\xfe\xed\xfa[\xce\xcf]|[\xce\xcf]\xfa\xed\xfe|\xca\xfe\xba\xbe)/s ? 1 : 0;
 }
 
+# Runs a tool; dies when it cannot be spawned (naming it). Returns (output, exit code).
+sub run_tool {
+  my ($merge_stderr, @cmd) = @_;
+  pipe(my $r, my $w) or die "pipe: $!\n";
+  pipe(my $er, my $ew) or die "pipe: $!\n";   # exec-failure channel, closed on exec
+  my $pid = fork // die "fork: $!\n";
+  if (!$pid) {
+    close $r; close $er;
+    open STDOUT, '>&', $w or POSIX::_exit(127);
+    open STDERR, '>&', $w or POSIX::_exit(127) if $merge_stderr;
+    { exec @cmd }
+    { my $o = select $ew; $| = 1; select $o }
+    print $ew "$!";
+    POSIX::_exit(127);
+  }
+  close $w; close $ew;
+  my $out = do { local $/; <$r> };
+  my $failed = do { local $/; <$er> };
+  close $r; close $er;
+  waitpid $pid, 0;
+  die "cannot run $cmd[0]: $failed\n" if defined $failed && length $failed;
+  return ($out // '', $? >> 8);
+}
+
 sub capture {
   my (@cmd) = @_;
-  open my $fh, '-|', @cmd or return '';
-  my $o = do { local $/; <$fh> };
-  close $fh;
-  return $o // '';
+  my ($out, $rc) = run_tool(0, @cmd);
+  die "$cmd[0] failed (exit $rc) on $cmd[-1]\n" if $rc;
+  return $out;
+}
+
+# ldd: only "not a dynamic executable" / "statically linked" may fail.
+sub capture_ldd {
+  my ($obj) = @_;
+  my ($out, $rc) = run_tool(1, 'ldd', $obj);
+  return $out if !$rc;
+  return '' if $out =~ /not a dynamic|statically linked/;
+  die "ldd failed (exit $rc) on $obj\n";
 }
 
 sub linked {
   my ($platform, $obj) = @_;
   my %seen;
   if ($platform eq 'linux') {
-    for (split /\n/, capture('ldd', $obj)) {
+    for (split /\n/, capture_ldd($obj)) {
       if    (/^\s*(\S+)\s+=>/) { $seen{ File::Basename::basename($1) } = 1 }
       elsif (m{^\s*(/\S+|\S+)\s+\(0x}) { $seen{ File::Basename::basename($1) } = 1 }
     }
@@ -136,6 +170,7 @@ sub run {
   } }, "$tmp");
   my @packed = map { $platform eq 'windows' ? lc File::Basename::basename($_) : File::Basename::basename($_) } @objects;
   unshift @objects, $archive if is_native($archive);
+  die "no shared objects to check in $archive: the gate proved nothing\n" unless @objects;
 
   my (%links, %glibc);
   for my $o (@objects) {
@@ -155,7 +190,10 @@ sub run {
   my @v = violations(\%links, \@allowed, \@packed);
   my $fail = 0;
   if (@v) { print STDERR "foreign shared libraries:\n", map({ "  $_\n" } @v); $fail = 1 }
-  if ($platform eq 'linux' && %glibc) {
+  if ($platform eq 'linux' && !%glibc) {
+    print STDERR "glibc check did not run: no GLIBC_ version found in any object\n"; $fail = 1;
+  }
+  elsif ($platform eq 'linux') {
     my $max = glibc_max(keys %glibc);
     if (glibc_cmp($max, $GLIBC_FLOOR) > 0) {
       print STDERR "glibc $max needed, floor is $GLIBC_FLOOR\n"; $fail = 1;

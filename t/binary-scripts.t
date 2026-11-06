@@ -393,4 +393,219 @@ my @LINUX_SYSTEM = (
   is(DzilBinary::LibGate::glibc_cmp('2.30', '2.4'),    1, 'glibc_cmp: 2.30 > 2.4');
 }
 
+# --- fix round 1: lib-gate must not pass silently ---------------------------
+# CLI runs use a PATH that holds ONLY a directory of fake shell-script tools
+# (interpreter is the absolute /bin/sh; scripts use builtins only).
+
+sub run_script_env {
+  my ($env, $name, @args) = @_;
+  my $tmp = tempdir(CLEANUP => 1);
+  my ($o, $e) = ("$tmp/out", "$tmp/err");
+  my $pid = fork // die "fork: $!";
+  if (!$pid) {
+    %ENV = (%ENV, %$env);
+    open STDOUT, '>', $o or die; open STDERR, '>', $e or die;
+    exec $^X, script($name), @args or die "exec: $!";
+  }
+  waitpid $pid, 0;
+  return ($? >> 8, scalar(slurp($o)), scalar(slurp($e)));
+}
+
+sub fake_tools {
+  my ($bindir, %tools) = @_;
+  require File::Path; File::Path::make_path($bindir);
+  for my $t (sort keys %tools) {
+    spew("$bindir/$t", "#!/bin/sh\n$tools{$t}\n");
+    chmod 0755, "$bindir/$t";
+  }
+  return $bindir;
+}
+
+# lib-gate on $zip for $platform with PATH = only $bindir; returns (rc, stdout . stderr)
+sub gate {
+  my ($zip, $platform, $bindir, %env) = @_;
+  my ($rc, $o, $e) = run_script_env({ PATH => $bindir, %env }, 'lib-gate.pl', $zip, $platform);
+  return ($rc, $o . $e);
+}
+
+my $LDD_LIBC = q{printf '\tlibc.so.6 => /lib64/libc.so.6 (0x00007f0000000000)\n'};
+sub objdump_versions {
+  my ($exit, @v) = @_;
+  return join "\n", (map { qq{echo "0000 g DF .text 0000 GLIBC_$_ memcpy"} } @v), "exit $exit";
+}
+
+{ # controls: the fake-tool setup itself works, so the red tests below measure the gate
+  my $d = tempdir(CLEANUP => 1);
+  my $zip = make_zip("$d/a.zip", 'shlib/libperl.so' => 'x');
+  my $bin = fake_tools("$d/ok", ldd => $LDD_LIBC, objdump => objdump_versions(0, '2.17', '2.5'));
+  my ($rc, $out) = gate($zip, 'linux', $bin);
+  is($rc, 0, 'gate_control_ok: libc only + GLIBC_2.17 -> exit 0') or diag $out;
+  like($out, qr/ok/, 'gate_control_ok: reports ok');
+
+  my $bin2 = fake_tools("$d/over", ldd => $LDD_LIBC, objdump => objdump_versions(0, '2.17', '2.29'));
+  ($rc, $out) = gate($zip, 'linux', $bin2);
+  is($rc, 1, 'gate_control_over_floor: GLIBC_2.29 -> exit 1');
+  like($out, qr/2\.29/, 'gate_control_over_floor: names 2.29');
+}
+
+{ # I1: a missing tool is a failure that names the tool
+  my $d = tempdir(CLEANUP => 1);
+  my $zip = make_zip("$d/a.zip", 'shlib/libperl.so' => 'x');
+
+  my $none = fake_tools("$d/none");
+  my ($rc, $out) = gate($zip, 'linux', $none);
+  isnt($rc, 0, 'tool_missing_both: no ldd/objdump on PATH -> non-zero exit');
+  unlike($out, qr/, ok\b/, 'tool_missing_both: never reports ok');
+  like($out, qr/\bldd\b|\bobjdump\b/, 'tool_missing_both: output names a missing tool');
+
+  my $no_ldd = fake_tools("$d/noldd", objdump => objdump_versions(0, '2.17'));
+  ($rc, $out) = gate($zip, 'linux', $no_ldd);
+  isnt($rc, 0, 'tool_missing_ldd: objdump present, ldd missing -> non-zero exit');
+  like($out, qr/\bldd\b/, 'tool_missing_ldd: output names ldd');
+
+  my $no_od = fake_tools("$d/noobjdump", ldd => $LDD_LIBC);
+  ($rc, $out) = gate($zip, 'linux', $no_od);
+  isnt($rc, 0, 'tool_missing_objdump: ldd present, objdump missing -> non-zero exit');
+  like($out, qr/\bobjdump\b/, 'tool_missing_objdump: output names objdump');
+
+  my $no_otool = fake_tools("$d/nootool");
+  ($rc, $out) = gate(make_zip("$d/m.zip", 'lib/auto/X/X.bundle' => 'x'), 'macos', $no_otool);
+  isnt($rc, 0, 'tool_missing_otool: macos without otool -> non-zero exit');
+  like($out, qr/\botool\b/, 'tool_missing_otool: output names otool');
+
+  my $no_od_win = fake_tools("$d/nowin");
+  ($rc, $out) = gate(make_zip("$d/w.zip", 'lib/auto/X/X.dll' => 'x'), 'windows', $no_od_win);
+  isnt($rc, 0, 'tool_missing_objdump_windows: windows without objdump -> non-zero exit');
+  like($out, qr/\bobjdump\b/, 'tool_missing_objdump_windows: output names objdump');
+
+  # a tool that fails is a failure, even when it printed a plausible answer first
+  my $bad = fake_tools("$d/badod", ldd => $LDD_LIBC, objdump => objdump_versions(3, '2.17'));
+  ($rc, $out) = gate($zip, 'linux', $bad);
+  isnt($rc, 0, 'tool_fails_objdump: objdump exiting 3 -> non-zero exit');
+  unlike($out, qr/, ok\b/, 'tool_fails_objdump: never reports ok');
+}
+
+{ # I2: the glibc check must have run on linux
+  my $d = tempdir(CLEANUP => 1);
+  my $zip = make_zip("$d/a.zip", 'shlib/libperl.so' => 'x');
+  my $bin = fake_tools("$d/bin", ldd => $LDD_LIBC, objdump => 'exit 0');
+  my ($rc, $out) = gate($zip, 'linux', $bin);
+  isnt($rc, 0, 'glibc_check_did_not_run: objdump -T lists no GLIBC_ version -> non-zero exit');
+  unlike($out, qr/, ok\b/, 'glibc_check_did_not_run: never reports ok');
+  like($out, qr/glibc/i, 'glibc_check_did_not_run: output mentions glibc');
+}
+
+{ # M1: an archive with no objects proves nothing
+  my $d = tempdir(CLEANUP => 1);
+  my $zip = make_zip("$d/none.zip", 'lib/Foo.pm' => "package Foo; 1;\n");
+  my $lin = fake_tools("$d/lin", ldd => $LDD_LIBC, objdump => objdump_versions(0, '2.17'));
+  my ($rc, $out) = gate($zip, 'linux', $lin);
+  isnt($rc, 0, 'zero_objects_linux: no shared objects in the archive -> non-zero exit');
+  unlike($out, qr/, ok\b/, 'zero_objects_linux: never reports ok');
+  my $mac = fake_tools("$d/mac", otool => qq{echo "\$2:"});
+  ($rc, $out) = gate($zip, 'macos', $mac);
+  isnt($rc, 0, 'zero_objects_macos: no objects -> non-zero exit');
+}
+
+{ # M2 (CLI): an absolute install name of a packed dylib counts as packed
+  my $d = tempdir(CLEANUP => 1);
+  my $otool = join "\n",
+    'f=$2', 'echo "$f:"',
+    'case "$f" in *Raw.bundle) printf \'\t/opt/homebrew/lib/libssl.3.dylib (compatibility version 3.0.0)\n\';; esac',
+    'printf \'\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\n\'';
+  my $bin = fake_tools("$d/bin", otool => $otool);
+  my $packed = make_zip("$d/packed.zip",
+    'lib/auto/Git/Raw/Raw.bundle' => 'x', 'lib/auto/libssl.3.dylib' => 'x');
+  my ($rc, $out) = gate($packed, 'macos', $bin);
+  is($rc, 0, 'macos_absolute_name_packed: /opt/homebrew/lib/libssl.3.dylib with libssl.3.dylib packed -> exit 0') or diag $out;
+  my $unpacked = make_zip("$d/unpacked.zip", 'lib/auto/Git/Raw/Raw.bundle' => 'x');
+  ($rc, $out) = gate($unpacked, 'macos', $bin);
+  is($rc, 1, 'macos_absolute_name_unpacked: same link, dylib not packed -> exit 1');
+  like($out, qr/libssl\.3\.dylib/, 'macos_absolute_name_unpacked: names the library');
+}
+
+{ # M2 (pure): same through violations()
+  my @MAC = ('/usr/lib/*', '/System/*');
+  my %links = ( 'Raw.bundle' => ['/opt/homebrew/lib/libssl.3.dylib', '/usr/lib/libSystem.B.dylib'] );
+  is_deeply([DzilBinary::LibGate::violations(\%links, \@MAC, ['libssl.3.dylib'])], [],
+    'violations_macos_absolute_packed: absolute install name matches packed basename -> no violation');
+  my @v = DzilBinary::LibGate::violations(\%links, \@MAC, []);
+  is(scalar @v, 1, 'violations_macos_absolute_unpacked: not packed -> one violation');
+  like($v[0] // '', qr{libssl\.3\.dylib.*Raw\.bundle}, 'violations_macos_absolute_unpacked: names lib and object');
+}
+
+{ # macOS system set (pure)
+  my @MAC = ('/usr/lib/*', '/System/*');
+  my %ok = ( 'a.bundle' => [
+    '/usr/lib/libSystem.B.dylib', '/usr/lib/libc++.1.dylib',
+    '/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation',
+  ] );
+  is_deeply([DzilBinary::LibGate::violations(\%ok, \@MAC, [])], [], 'violations_macos_system: /usr/lib/* and /System/* pass');
+  my %bad = ( 'a.bundle' => ['/usr/lib/libSystem.B.dylib', '/usr/local/lib/libssl.3.dylib'] );
+  my @v = DzilBinary::LibGate::violations(\%bad, \@MAC, []);
+  is(scalar @v, 1, 'violations_macos_foreign: /usr/local/lib is not system -> one violation');
+  like($v[0] // '', qr{/usr/local/lib/libssl\.3\.dylib}, 'violations_macos_foreign: names it');
+}
+
+{ # Windows set (pure): api-ms-*, System32 names case-insensitively, foreign flagged
+  my @WIN = ('api-ms-*', 'KERNEL32.dll');
+  my %ok = ( 'a.dll' => ['api-ms-win-crt-runtime-l1-1-0.dll', 'kernel32.DLL'] );
+  is_deeply([DzilBinary::LibGate::violations(\%ok, \@WIN, [])], [], 'violations_windows_system: api-ms-* and a System32 name (any case) pass');
+  my %bad = ( 'a.dll' => ['kernel32.dll', 'libssl-3-x64.dll'] );
+  my @v = DzilBinary::LibGate::violations(\%bad, \@WIN, []);
+  is(scalar @v, 1, 'violations_windows_foreign: libssl-3-x64.dll -> one violation');
+  like($v[0] // '', qr/libssl-3-x64\.dll.*a\.dll/, 'violations_windows_foreign: names lib and object');
+}
+
+{ # Windows (CLI): System32 resolved from SystemRoot, case-insensitively
+  my $d = tempdir(CLEANUP => 1);
+  spew("$d/win/System32/kernel32.dll", 'x');
+  my $objdump = join "\n", 'f=$2',
+    'case "$f" in *a.dll) printf \'\tDLL Name: KERNEL32.dll\n\tDLL Name: api-ms-win-crt-runtime-l1-1-0.dll\n\';; esac',
+    'case "$f" in *b.dll) printf \'\tDLL Name: libssl-3-x64.dll\n\';; esac';
+  my $bin = fake_tools("$d/bin", objdump => $objdump);
+  my ($rc, $out) = gate(make_zip("$d/ok.zip", 'lib/auto/a.dll' => 'x'), 'windows', $bin, SystemRoot => "$d/win");
+  is($rc, 0, 'windows_cli_system: kernel32 (System32) + api-ms-* -> exit 0') or diag $out;
+  ($rc, $out) = gate(make_zip("$d/bad.zip", 'lib/auto/a.dll' => 'x', 'lib/auto/b.dll' => 'x'), 'windows', $bin, SystemRoot => "$d/win");
+  is($rc, 1, 'windows_cli_foreign: libssl-3-x64.dll linked by b.dll -> exit 1');
+  like($out, qr/libssl-3-x64\.dll/, 'windows_cli_foreign: names it');
+}
+
+# --- fix round 1: require-gate glob must count modules, not any member -------
+
+{
+  my $d = tempdir(CLEANUP => 1);
+  my $readme = make_zip("$d/readme.zip", 'lib/Foo/README' => "text\n");
+  my ($rc) = run_script('require-gate.pl', $readme, 'Foo::*');
+  is($rc, 1, 'require_glob_non_pm: lib/Foo/README (not a .pm) does not satisfy Foo::*');
+
+  my $dir = make_zip("$d/dir.zip", 'lib/Foo/' => '');
+  ($rc) = run_script('require-gate.pl', $dir, 'Foo::*');
+  is($rc, 1, 'require_glob_dir_entry: a bare lib/Foo/ directory entry does not satisfy Foo::*');
+
+  my $pm = make_zip("$d/pm.zip", 'lib/Foo/README' => "text\n", 'lib/Foo/Deep/X.pm' => "package Foo::Deep::X; 1;\n");
+  ($rc) = run_script('require-gate.pl', $pm, 'Foo::*');
+  is($rc, 0, 'require_glob_pm_beside_readme: a real .pm below lib/Foo/ still satisfies Foo::*');
+}
+
+# --- fix round 1: pp-args.pl child failures: one message each, no argv --------
+
+{
+  my $d = tempdir(CLEANUP => 1);
+  my $bins = { 'mcp-x' => { %{ $BIN{'mcp-x'} }, modules => ['Foo'], pp_args => q{echo -a} } };
+  my $meta = write_meta($d, { platforms => [@ALL], binaries => $bins });
+
+  my ($rc, $out, $err) = run_script('pp-args.pl', $meta, 'mcp-x', '/o/out', "$d/no-such-dist-root");
+  isnt($rc, 0, 'pp_args_child_chdir_fails: unusable dist_root -> non-zero exit');
+  is($out, '', 'pp_args_child_chdir_fails: no argv printed');
+  is(scalar(() = $err =~ /cannot chdir/g), 1, 'pp_args_child_chdir_fails: the child message appears exactly once');
+  is(scalar(() = $err =~ /binary_pp_args failed/g), 1, 'pp_args_child_chdir_fails: the failure message appears exactly once');
+
+  my $empty = tempdir(CLEANUP => 1);
+  ($rc, $out, $err) = run_script_env({ PATH => $empty }, 'pp-args.pl', $meta, 'mcp-x', '/o/out', $d);
+  isnt($rc, 0, 'pp_args_child_exec_fails: sh not runnable -> non-zero exit');
+  is($out, '', 'pp_args_child_exec_fails: no argv printed');
+  is(scalar(() = $err =~ /cannot exec sh/g), 1, 'pp_args_child_exec_fails: the child message appears exactly once');
+}
+
 done_testing;

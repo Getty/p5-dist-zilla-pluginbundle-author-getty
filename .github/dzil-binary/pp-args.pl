@@ -5,6 +5,7 @@ package DzilBinary::PPArgs;
 use strict;
 use warnings;
 use JSON::PP ();
+use POSIX ();
 
 # Same line rule as the bundle's local check: split on "\n" only, strip one
 # trailing "\r", drop empty lines; one line is one argument.
@@ -20,10 +21,10 @@ sub run_in {
   my $pid = fork // die "fork: $!\n";
   if (!$pid) {
     close $r;
-    open STDOUT, '>&', $w or die "dup: $!";
-    chdir $dir or do { print STDERR "cannot chdir to $dir: $!\n"; exit 127 };
+    open STDOUT, '>&', $w or do { print STDERR "cannot redirect stdout: $!\n"; POSIX::_exit(127) };
+    chdir $dir or do { print STDERR "cannot chdir to $dir: $!\n"; POSIX::_exit(127) };
     { exec 'sh', '-c', $cmd }
-    print STDERR "cannot exec sh: $!\n"; exit 127;
+    print STDERR "cannot exec sh: $!\n"; POSIX::_exit(127);
   }
   close $w;
   my $out = do { local $/; <$r> };

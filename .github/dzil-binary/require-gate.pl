@@ -16,7 +16,7 @@ sub missing {
   for my $spec (@specs) {
     if ($spec =~ /\A(.+)::\*\z/) {
       (my $prefix = "lib/$1/") =~ s{::}{/}g;
-      push @missing, "$prefix*" unless grep { index($_, $prefix) == 0 && length($_) > length($prefix) } @names;
+      push @missing, "$prefix*" unless grep { /\A\Q$prefix\E.+\.pm\z/ } @names;
     }
     else {
       (my $path = "lib/$spec.pm") =~ s{::}{/}g;
