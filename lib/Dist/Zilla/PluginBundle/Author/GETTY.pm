@@ -10,6 +10,10 @@ with 'Dist::Zilla::Role::PluginBundle::Easy';
 # here when no explicit value is set on the subsection itself.
 our %DOCKER_DEFAULTS;
 
+# The same for [@Author::GETTY::Binary / ...] subsections, from the binary_*
+# keys. has_release says whether the GitHub release plugin is active.
+our %BINARY_DEFAULTS;
+
 sub bundle_config {
   my ($class, $section) = @_;
 
@@ -20,6 +24,8 @@ sub bundle_config {
     tags  => $self->payload->{docker_tags},
     local => $self->payload->{docker_local},
   );
+
+  %BINARY_DEFAULTS = $self->_binary_defaults;
 
   $self->configure;
 
@@ -1146,7 +1152,7 @@ has alien_bin_requires => (
   default => sub { defined $_[0]->payload->{alien_bin_requires} ? $_[0]->payload->{alien_bin_requires} : [] },
 );
 
-sub mvp_multivalue_args { @run_attributes, @gather_array_attributes, 'alien_bin_requires', @alien_array_attributes, 'commit_files_after_release', 'version_finder' }
+sub mvp_multivalue_args { @run_attributes, @gather_array_attributes, 'alien_bin_requires', @alien_array_attributes, 'commit_files_after_release', 'version_finder', qw(binary binary_modules binary_require binary_platforms) }
 
 sub effective_gather_exclude_filename {
   my ($self) = @_;
@@ -1165,6 +1171,28 @@ sub _docker_default {
   return defined $self->payload->{docker_image}
     && length $self->payload->{docker_image}
     && ($self->payload->{docker_default} // 1);
+}
+
+# The binary_* keys, as the defaults of the Binary subsections (their own
+# names, without the prefix). Only those that are set.
+sub _binary_defaults {
+  my ($self) = @_;
+  my $p = $self->payload;
+  my %d;
+  for my $k (qw( modules require platforms pp_args verify smoke prepare )) {
+    $d{$k} = $p->{"binary_$k"} if defined $p->{"binary_$k"};
+  }
+  $d{has_release} = ($self->no_github || $self->no_github_release) ? 0 : 1
+    if $self->_binaries;
+  return %d;
+}
+
+# The binary names declared with binary = ..., whitespace split.
+sub _binaries {
+  my ($self) = @_;
+  my $b = $self->payload->{binary};
+  return () unless defined $b;
+  return map { split /\s+/ } grep { defined && length } ref $b eq 'ARRAY' ? @$b : ($b);
 }
 
 sub configure {
@@ -1467,6 +1495,18 @@ sub configure {
         notes_from => 'ChangeLog',
       }
     ]);
+  }
+
+  # Binaries: one @Author::GETTY::Binary per binary = ..., sharing the
+  # binary_* keys. They are published as assets of the GitHub release, so
+  # that has to exist.
+  if ($self->_binaries) {
+    die "[\@Author::GETTY] binary release needs the GitHub release, but it is off "
+      . "(no_github, no_github_release or no GitHub remote)\n"
+      if $self->no_github || $self->no_github_release;
+    unless (defined $self->payload->{binary_default} && !$self->payload->{binary_default}) {
+      $self->add_bundle('@Author::GETTY::Binary' => { binary_name => $_ }) for $self->_binaries;
+    }
   }
 
   # Docker support: if docker_image is set on this bundle, auto-add a single

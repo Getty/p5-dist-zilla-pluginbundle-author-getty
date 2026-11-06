@@ -1,5 +1,15 @@
 {{$NEXT}}
 
+  - New option family for dists that ship standalone binaries: "binary = name"
+    (repeatable) with the optional "binary_modules", "binary_require",
+    "binary_platforms", "binary_pp_args", "binary_verify", "binary_smoke" and
+    "binary_prepare" keys adds one [@Author::GETTY::Binary / name] subsection
+    per binary, and its plugin writes them as "x_binaries" into META.json.
+    "binary_default = 0" leaves the subsections out. A binary release is
+    published as assets of the GitHub release, so "dzil" now dies at build
+    when "binary" is set together with "no_github" or "no_github_release".
+    Dists without "binary" keys are unchanged.
+
   - A GitHub-hosted dist now creates its release as a draft, attaches the
     tarball and only then publishes it, so a release is never visible
     without its tarball. A failed upload or publish fails "dzil release"
