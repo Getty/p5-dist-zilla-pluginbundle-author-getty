@@ -7,6 +7,7 @@
 #   PLATFORM    override the detected platform
 #   BASE_URL    releases URL (default https://github.com/@OWNER@/@REPO@/releases)
 set -eu
+set -f
 
 ENVP='@ENV@'
 TAG='@TAG@'
@@ -19,9 +20,9 @@ getenv() { eval "printf '%s' \"\${${ENVP}_$1:-}\""; }
 
 die() { printf '%s\n' "$*" >&2; exit 1; }
 
-TMPS=''
+TMPDIR_=''
 cleanup() {
-  for t in $TMPS; do rm -f "$t"; done
+  if [ -n "$TMPDIR_" ]; then rm -rf -- "$TMPDIR_"; fi
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
@@ -62,11 +63,15 @@ SUFFIX=''
 [ "$PLATFORM" = windows-x86_64 ] && SUFFIX='.exe'
 
 if [ $# -gt 0 ]; then
-  SELECTED=$*
-  for want in $SELECTED; do
+  SELECTED=''
+  for want in "$@"; do
     case " $BINARIES " in
       *" $want "*) ;;
       *) die "Unknown binary: $want. Available: $BINARIES" ;;
+    esac
+    case " $SELECTED " in
+      *" $want "*) ;;
+      *) SELECTED="$SELECTED $want" ;;
     esac
   done
 else
@@ -85,33 +90,30 @@ command -v curl >/dev/null 2>&1 || die "Need curl to download"
 mkdir -p "$DIR"
 URL="$BASE/download/$TAG"
 
-SUMS=$(mktemp "$DIR/.sums.XXXXXX")
-TMPS="$TMPS $SUMS"
+TMPDIR_=$(mktemp -d "$DIR/.install.XXXXXX")
+SUMS="$TMPDIR_/SHA256SUMS"
 curl -fsSL -o "$SUMS" "$URL/SHA256SUMS" || die "Download failed: $URL/SHA256SUMS"
 
 # Download and verify everything first; install only when all of it checks out.
-PLAN=''
 for name in $SELECTED; do
   asset="$name-$VERSION-$PLATFORM$SUFFIX"
-  tmp=$(mktemp "$DIR/.$name.XXXXXX")
-  TMPS="$TMPS $tmp"
+  tmp="$TMPDIR_/$name"
   curl -fsSL -o "$tmp" "$URL/$asset" || die "Download failed: $URL/$asset"
   want=$(awk -v a="$asset" '$2 == a { print $1 }' "$SUMS")
   [ -n "$want" ] || die "No checksum for $asset in SHA256SUMS"
   got=$(sha256 "$tmp")
   [ "$got" = "$want" ] || die "Checksum mismatch for $asset (expected $want, got $got)"
   chmod 755 "$tmp"
-  PLAN="$PLAN $name"
-  eval "TMP_$(printf '%s' "$name" | tr -c 'A-Za-z0-9' '_')=\$tmp"
 done
 
-for name in $PLAN; do
-  eval "tmp=\$TMP_$(printf '%s' "$name" | tr -c 'A-Za-z0-9' '_')"
-  mv -f "$tmp" "$DIR/$name$SUFFIX"
+for name in $SELECTED; do
+  mv -f "$TMPDIR_/$name" "$DIR/$name$SUFFIX"
   printf 'Installed %s\n' "$DIR/$name$SUFFIX"
   # The first start unpacks the PAR cache; do it now rather than on first use.
   "$DIR/$name$SUFFIX" --help </dev/null >/dev/null 2>&1 || true
 done
+rm -rf -- "$TMPDIR_"
+TMPDIR_=''
 
 case ":${PATH:-}:" in
   *":$DIR:"*) ;;

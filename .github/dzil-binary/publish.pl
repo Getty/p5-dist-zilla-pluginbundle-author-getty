@@ -62,7 +62,7 @@ sub render {
   die "$meta_file has no name or version\n" unless defined $name && defined $version;
   die "tag '$tag' does not end with version '$version'\n" unless length $tag >= length $version && substr($tag, -length $version) eq $version;
   my $prefix = substr($tag, 0, length($tag) - length $version);
-  die "tag prefix '$prefix' must not contain a digit\n" if $prefix =~ /\d/;
+  die "tag '$tag' does not end with version '$version' after a digit-free prefix (prefix '$prefix' contains a digit)\n" if $prefix =~ /\d/;
   my @bins = binaries_of($x);
   my @plat = platforms_of($x);
   for my $v ($name, $owner, $repo, $tag, $version, @bins) {

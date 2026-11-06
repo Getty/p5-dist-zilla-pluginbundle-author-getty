@@ -36,8 +36,12 @@ sub run_cmd {
   my $o = "$tmp/out";
   my $pid = fork // die "fork: $!";
   if (!$pid) {
+    my %e = %$env;
+    my $cwd = delete $e{_cwd}; my $stdin = delete $e{_stdin};
     delete $ENV{$_} for grep { /\AFOO_BAR_/ } keys %ENV;
-    $ENV{$_} = $env->{$_} for keys %$env;
+    $ENV{$_} = $e{$_} for keys %e;
+    if (defined $cwd) { chdir $cwd or die "chdir: $!" }
+    if (defined $stdin) { spew("$tmp/in", $stdin); open STDIN, '<', "$tmp/in" or die }
     open STDOUT, '>', $o or die; open STDERR, '>&', \*STDOUT or die;
     exec @cmd or die "exec: $!";
   }
@@ -46,7 +50,7 @@ sub run_cmd {
 }
 
 my @ALL = qw( linux-x86_64 linux-arm64 macos-arm64 macos-x86_64 windows-x86_64 );
-my @BINS = qw( foo bar );
+our @BINS = qw( foo bar );
 
 sub asset { my ($n, $v, $p) = @_; return "$n-$v-$p" . ($p eq 'windows-x86_64' ? '.exe' : '') }
 
@@ -85,7 +89,8 @@ sub serve {
   for my $p (@{ $o{platforms} }) {
     for my $n (@BINS) {
       my $name = asset($n, $o{version}, $p);
-      my $body = "#!/bin/sh\necho \"$p \$*\" >> '$logdir/$n.log'\n";
+      my $body = $o{body} ? $o{body}->($n, $p, $logdir)
+        : "#!/bin/sh\necho \"$p \$*\" >> '$logdir/$n.log'\n";
       spew("$dl/$name", $body);
       push @sums, sha256_hex($body) . "  $name\n";
     }
@@ -100,7 +105,7 @@ sub fixture {
   my $tag = $o{tag} || 'v1.0';
   my ($rc, $out, $rdir) = render('1.0', $tag, \@ALL);
   is($rc, 0, 'fixture: publish.pl render exits 0') or diag $out;
-  my ($rel, $logdir, $dl) = serve(tag => $tag, version => '1.0', platforms => \@ALL);
+  my ($rel, $logdir, $dl) = serve(tag => $tag, version => '1.0', platforms => \@ALL, body => $o{body});
   my $home = tempdir(CLEANUP => 1);
   return { rdir => $rdir, rel => $rel, logdir => $logdir, dl => $dl, home => $home, ok => $rc == 0,
            inst => "$home/inst/bin" };
@@ -265,5 +270,95 @@ subtest platform_detection_maps_uname => sub {
   is(-e "$f->{logdir}/foo.log" ? slurp("$f->{logdir}/foo.log") : '<never ran>', "$want --help\n",
     "detected platform is $want (uname mapping: Linux->linux, Darwin->macos, x86_64|amd64->x86_64, aarch64|arm64->arm64)");
 };
+
+# --- fix round 1 -----------------------------------------------------------------
+
+subtest install_dir_with_space => sub {
+  my $f = fixture(); $f->{ok} or return fail('fixture');
+  $f->{inst} = "$f->{home}/inst dir";
+  my ($rc, $out) = install($f);
+  is($rc, 0, 'exit 0') or diag $out;
+  is_deeply([listing($f->{inst})], [qw( bar foo )], 'both installed into a directory with a space');
+
+  my $g = fixture(); $g->{ok} or return fail('fixture');
+  $g->{inst} = "$g->{home}/inst dir";
+  my $foo = "$g->{dl}/" . asset('foo', '1.0', 'linux-x86_64');
+  spew($foo, slurp($foo) . "# tampered\n");
+  ($rc, $out) = install($g);
+  isnt($rc, 0, 'checksum mismatch: exit != 0');
+  is_deeply([listing($g->{inst})], [], 'checksum mismatch: INSTALL_DIR holds no files at all, hidden ones included');
+};
+
+subtest duplicate_selection => sub {
+  my $f = fixture(); $f->{ok} or return fail('fixture');
+  my ($rc, $out) = install($f, [qw( foo foo )]);
+  is($rc, 0, 'exit 0') or diag $out;
+  is_deeply([listing($f->{inst})], ['foo'], 'foo installed, bar not, no leftover files');
+  is(-e "$f->{logdir}/foo.log" ? slurp("$f->{logdir}/foo.log") : '<never ran>', "linux-x86_64 --help\n", 'foo handled once (one warm-up run)');
+  ok(!-e "$f->{logdir}/bar.log", 'bar never ran');
+};
+
+subtest similar_binary_names => sub {
+  local @BINS = qw( foo-bar foo_bar );
+  my ($rc, $out, $rdir) = render('1.0', 'v1.0', ['linux-x86_64']);
+  is($rc, 0, 'render exits 0') or return diag $out;
+  my ($rel, $logdir) = serve(tag => 'v1.0', version => '1.0', platforms => ['linux-x86_64']);
+  my $home = tempdir(CLEANUP => 1);
+  my $f = { rdir => $rdir, rel => $rel, logdir => $logdir, home => $home, inst => "$home/bin" };
+  ($rc, $out) = install($f);
+  is($rc, 0, 'exit 0') or diag $out;
+  is_deeply([listing($f->{inst})], [qw( foo-bar foo_bar )], 'both installed');
+  for my $n (@BINS) {
+    is(-e "$f->{inst}/$n" ? slurp("$f->{inst}/$n") : '<missing>', "#!/bin/sh\necho \"linux-x86_64 \$*\" >> '$logdir/$n.log'\n", "$n has its own content");
+    is(-e "$logdir/$n.log" ? slurp("$logdir/$n.log") : '<never ran>', "linux-x86_64 --help\n", "$n ran once, logging to its own file");
+  }
+};
+
+subtest glob_selection_not_expanded => sub {
+  my $f = fixture(); $f->{ok} or return fail('fixture');
+  my $cwd = tempdir(CLEANUP => 1);
+  spew("$cwd/foo", "i am a file in cwd\n");
+  my ($rc, $out) = install($f, ['f*'], _cwd => $cwd);
+  isnt($rc, 0, "'f*' is an unknown name -> exit != 0");
+  like($out, qr/\bfoo\b/, 'output names foo');
+  like($out, qr/\bbar\b/, 'output names bar');
+  is_deeply([listing($f->{inst})], [], 'nothing installed');
+};
+
+subtest warmup_stdin_is_empty => sub {
+  my $body = sub { my ($n, $p, $logdir) = @_;
+    return "#!/bin/sh\nif read -r x; then echo got-input; else echo stdin-empty; fi >> '$logdir/$n.log'\n" };
+  my $f = fixture(body => $body); $f->{ok} or return fail('fixture');
+  my ($rc, $out) = install($f, [], _stdin => "data\n");
+  is($rc, 0, 'exit 0') or diag $out;
+  is(-e "$f->{logdir}/$_.log" ? slurp("$f->{logdir}/$_.log") : '<never ran>', "stdin-empty\n", "$_: warm-up run sees an empty stdin") for @BINS;
+};
+
+subtest warmup_failure_is_ignored => sub {
+  my $body = sub { my ($n, $p, $logdir) = @_; return "#!/bin/sh\necho ran >> '$logdir/$n.log'\nexit 1\n" };
+  my $f = fixture(body => $body); $f->{ok} or return fail('fixture');
+  my ($rc, $out) = install($f);
+  is($rc, 0, 'a binary exiting 1 on --help does not fail the install') or diag $out;
+  is_deeply([listing($f->{inst})], [qw( bar foo )], 'both installed');
+};
+
+subtest render_rejects_bad_tags => sub {
+  for my $case ([ 'r2-1.0', 'prefix contains a digit' ], [ 'v1.1', 'tag does not end with the version' ]) {
+    my ($tag, $why) = @$case;
+    my ($rc, $out) = render('1.0', $tag, ['linux-x86_64']);
+    isnt($rc, 0, "$tag / 1.0 ($why): render exits != 0");
+    like($out, qr/\Q$tag\E/, "$tag: message names the tag");
+    like($out, qr/1\.0/, "$tag: message names the version");
+  }
+};
+
+{
+  my ($rc, $out, $rdir) = render('1.0', 'v1.0', ['linux-x86_64']);
+  if ($rc == 0 && -f "$rdir/install.ps1") {
+    like(slurp("$rdir/install.ps1"), qr/\[scriptblock\]::Create/, 'ps1_header: install.ps1 documents the [scriptblock]::Create selection form');
+  } else {
+    fail('ps1_header: render did not produce install.ps1');
+  }
+}
 
 done_testing;
