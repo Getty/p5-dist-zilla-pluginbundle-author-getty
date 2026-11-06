@@ -36,6 +36,14 @@
     shared library other than the system ones or needs a glibc newer than
     2.28. No effect on dists without "binary" keys.
 
+  - The shared binary release workflow gets its publish-job helper
+    .github/dzil-binary/publish.pl (render, expected, sums, check) and the
+    install script templates install.sh.in and install.ps1.in. The rendered
+    install scripts download the binaries of a GitHub release, verify them
+    against SHA256SUMS and install them; install.ps1 defaults to
+    %LOCALAPPDATA%\Programs\<dist name>. No effect on dists without "binary"
+    keys.
+
 0.327     2026-10-26 00:40:01Z
 
   - The CI documentation says when the "v1" tag of the dzil-test action
