@@ -1,0 +1,33 @@
+---
+claimed_at: 2026-11-06T20:35:12Z
+claimed_by: p5-dist-zilla-pluginbundle-author-getty
+class: standard
+completed: 2026-11-06T20:35:12Z
+created: 2026-11-03T06:15:30Z
+id: 17
+priority: medium
+started: 2026-11-06T20:27:26Z
+status: done
+tags:
+- github
+- release
+title: GitHub::CreateRelease publishes before the tarball upload — race for release-triggered
+  workflows
+updated: 2026-11-06T20:35:12Z
+---
+
+Filed from p5-mcp-wiki (binary-release spike, Getty/mcp-wiki-binary-spike, run 41587737077).
+
+GitHub::CreateRelease creates the GitHub Release published and uploads the CPAN tarball afterwards; a failed upload is only logged. A workflow on `release: published` therefore starts before the tarball is there — the spike's binary workflow saw "no assets to download" 6 times before the asset appeared, and needs a retry loop (30 x 10 s).
+
+Proposal: create the release as draft, upload the tarball, then publish (what `gh release create` does) — and make a failed upload fail the release step loudly. Relevant for the planned binary release form (`binary = ...` + shared `dzil-binary@v1` action), which downloads the tarball from the release.
+
+Planned as Task 1 of ~/dev/p5-mcp-wiki/docs/superpowers/plans/2026-11-03-binary-bundle.md: subclass Dist::Zilla::Plugin::Author::GETTY::GitHubRelease (draft -> upload tarball, die unless 201 -> publish with make_latest false when a Binary plugin is present). The bundle uses it in place of GitHub::CreateRelease. No upstream PR (public write, own go).
+
+RED: t/github_release.t written (fails: GitHubRelease.pm missing); t/task_next_release.t now looks up Author::GETTY::GitHubRelease (R1).
+
+GitHubRelease implemented, bundle switched, t/ green (241), dzil build ok
+
+ready for review; see task-1-report.md GREEN
+
+Committed as 004440d: GitHubRelease creates draft, uploads tarball, then publishes; make_latest false when a Binary plugin is present
