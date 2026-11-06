@@ -77,9 +77,9 @@ sub plugin_index {
   ok defined $next && defined $commit && $next < $commit,
     'task: NextRelease comes before Git::Commit, which commits the stamped Changes';
 
-  my $release = plugin_index($tzil, 'GitHub::CreateRelease');
+  my $release = plugin_index($tzil, 'Author::GETTY::GitHubRelease');
   ok defined $release && defined $next && $next < $release,
-    'task: NextRelease comes before GitHub::CreateRelease, which reads the notes from Changes';
+    'task: NextRelease comes before Author::GETTY::GitHubRelease, which reads the notes from Changes';
 
   ok defined plugin_index($tzil, 'Test::ChangesHasContent'),
     'task: Test::ChangesHasContent is in the plugin list';

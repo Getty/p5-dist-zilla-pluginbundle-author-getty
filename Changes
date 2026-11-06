@@ -1,5 +1,11 @@
 {{$NEXT}}
 
+  - A GitHub-hosted dist now creates its release as a draft, attaches the
+    tarball and only then publishes it, so a release is never visible
+    without its tarball. A failed upload or publish fails "dzil release"
+    loudly and leaves the draft in place for inspection. The release is
+    marked as latest unless the dist ships binaries.
+
   - A "task" dist stamps Changes with [NextRelease] in the same format and
     UTC time as the other dists, ahead of @Git, so the stamped Changes is
     committed with the release and GitHub::CreateRelease finds its notes.

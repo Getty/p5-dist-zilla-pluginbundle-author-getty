@@ -1462,7 +1462,7 @@ sub configure {
 
   unless ($self->no_github || $self->no_github_release) {
     $self->add_plugins([
-      'GitHub::CreateRelease' => {
+      'Author::GETTY::GitHubRelease' => {
         branch     => $self->release_branch,
         notes_from => 'ChangeLog',
       }
