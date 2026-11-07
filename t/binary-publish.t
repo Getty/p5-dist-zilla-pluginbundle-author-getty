@@ -68,12 +68,30 @@ sub dl_dir {
 
 sub release_json {
   my ($prerelease, @assets) = @_;
+  return release_full(prerelease => $prerelease, assets => [@assets]);
+}
+
+# release JSON with explicit id / created_at / tag_name (any may be omitted)
+sub release_full {
+  my (%o) = @_;
   my $d = tempdir(CLEANUP => 1);
   spew("$d/release.json", JSON::PP->new->encode({
-    prerelease => $prerelease ? JSON::PP::true : JSON::PP::false,
-    assets     => [ map { { name => $_ } } @assets ],
+    prerelease => $o{prerelease} ? JSON::PP::true : JSON::PP::false,
+    assets     => [ map { { name => $_ } } @{ $o{assets} || ['Foo-Bar-1.0.tar.gz'] } ],
+    (exists $o{id}         ? (id         => $o{id})         : ()),
+    (exists $o{created_at} ? (created_at => $o{created_at}) : ()),
+    (exists $o{tag_name}   ? (tag_name   => $o{tag_name})   : ()),
   }));
   return "$d/release.json";
+}
+
+# the releases/latest response: a hash is encoded, undef is the empty file
+# (the workflow's "404, no latest release"), a plain string is written as is
+sub latest_json {
+  my ($v) = @_;
+  my $d = tempdir(CLEANUP => 1);
+  spew("$d/latest.json", !defined $v ? '' : ref $v ? JSON::PP->new->encode($v) : $v);
+  return "$d/latest.json";
 }
 
 ok(-f $script, 'publish.pl exists') or do { diag "missing $script"; };
@@ -108,14 +126,14 @@ ok(-f $script, 'publish.pl exists') or do { diag "missing $script"; };
 
 { # complete dl-dir, release with only the tarball
   my $d = tempdir(CLEANUP => 1);
-  my ($rc, $out, $err) = run_script('check', write_meta($d), '1.0', dl_dir(), release_json(0, 'Foo-Bar-1.0.tar.gz'));
+  my ($rc, $out, $err) = run_script('check', write_meta($d), '1.0', dl_dir(), release_json(0, 'Foo-Bar-1.0.tar.gz'), latest_json(undef));
   is($rc, 0, 'check_ok: all binaries present, release has only the tarball -> exit 0') or diag "$out$err";
   like($out, qr/^latest=true$/m, 'check_ok: prints latest=true for a normal release');
 }
 
 { # prerelease_is_never_marked_latest
   my $d = tempdir(CLEANUP => 1);
-  my ($rc, $out, $err) = run_script('check', write_meta($d), '1.0', dl_dir(), release_json(1, 'Foo-Bar-1.0.tar.gz'));
+  my ($rc, $out, $err) = run_script('check', write_meta($d), '1.0', dl_dir(), release_json(1, 'Foo-Bar-1.0.tar.gz'), latest_json(undef));
   is($rc, 0, 'prerelease_is_never_marked_latest: exit 0') or diag "$out$err";
   like($out, qr/^latest=false$/m, 'prerelease_is_never_marked_latest: prerelease=true -> latest=false');
   unlike($out, qr/latest=true/, 'prerelease_is_never_marked_latest: no latest=true anywhere');
@@ -124,7 +142,7 @@ ok(-f $script, 'publish.pl exists') or do { diag "missing $script"; };
 { # missing_binary_fails
   my $d = tempdir(CLEANUP => 1);
   my $gone = 'bar-1.0-windows-x86_64.exe';
-  my ($rc, $out, $err) = run_script('check', write_meta($d), '1.0', dl_dir(without => $gone), release_json(0, 'Foo-Bar-1.0.tar.gz'));
+  my ($rc, $out, $err) = run_script('check', write_meta($d), '1.0', dl_dir(without => $gone), release_json(0, 'Foo-Bar-1.0.tar.gz'), latest_json(undef));
   is($rc, 1, 'missing_binary_fails: exit 1') or diag "$out$err";
   like("$out$err", qr/\Q$gone\E/, 'missing_binary_fails: output names the missing binary');
   unlike("$out$err", qr/\bfoo-1\.0-linux-x86_64\b/, 'missing_binary_fails: present binaries are not blamed');
@@ -133,10 +151,79 @@ ok(-f $script, 'publish.pl exists') or do { diag "missing $script"; };
 { # refuses_when_any_asset_exists
   my $d = tempdir(CLEANUP => 1);
   my ($rc, $out, $err) = run_script('check', write_meta($d), '1.0', dl_dir(),
-    release_json(0, 'Foo-Bar-1.0.tar.gz', 'foo-1.0-linux-x86_64'));
+    release_json(0, 'Foo-Bar-1.0.tar.gz', 'foo-1.0-linux-x86_64'), latest_json(undef));
   is($rc, 1, 'refuses_when_any_asset_exists: one expected asset already on the release -> exit 1') or diag "$out$err";
   like("$out$err", qr/foo-1\.0-linux-x86_64/, 'refuses_when_any_asset_exists: output names the existing asset');
   unlike($out, qr/latest=true/, 'refuses_when_any_asset_exists: never announces latest=true');
+}
+
+# --- check: the latest rule (never roll releases/latest back) ----------------
+# 5th argument: the releases/latest response, or an empty file for "404, none".
+
+sub check_latest {
+  my ($rel, $latest) = @_;
+  my $d = tempdir(CLEANUP => 1);
+  return run_script('check', write_meta($d), '1.0', dl_dir(), release_full(%$rel), latest_json($latest));
+}
+
+{ # older_release_is_not_marked_latest
+  my ($rc, $out, $err) = check_latest(
+    { id => 100, created_at => '2026-01-01T00:00:00Z', tag_name => 'v1.0' },
+    { id => 200, created_at => '2026-06-01T00:00:00Z', tag_name => 'v2.0' });
+  is($rc, 0, 'older_release_is_not_marked_latest: exit 0') or diag "$out$err";
+  like($out, qr/^latest=false$/m, 'older_release_is_not_marked_latest: latest is newer -> latest=false');
+  unlike($out, qr/latest=true/, 'older_release_is_not_marked_latest: no latest=true anywhere');
+  like($err, qr/v2\.0/, 'older_release_is_not_marked_latest: STDERR names the newer tag');
+}
+
+{ # newer_release_is_marked_latest
+  my ($rc, $out, $err) = check_latest(
+    { id => 300, created_at => '2026-09-01T00:00:00Z', tag_name => 'v3.0' },
+    { id => 200, created_at => '2026-06-01T00:00:00Z', tag_name => 'v2.0' });
+  is($rc, 0, 'newer_release_is_marked_latest: exit 0') or diag "$out$err";
+  like($out, qr/^latest=true$/m, 'newer_release_is_marked_latest: latest is older -> latest=true');
+  # equal created_at (<=) also counts as latest
+  ($rc, $out, $err) = check_latest(
+    { id => 301, created_at => '2026-06-01T00:00:00Z' },
+    { id => 200, created_at => '2026-06-01T00:00:00Z' });
+  like($out, qr/^latest=true$/m, 'newer_release_is_marked_latest: equal created_at -> latest=true') or diag "$out$err";
+}
+
+{ # no_latest_release_marks_latest: an empty file is a 404
+  my ($rc, $out, $err) = check_latest({ id => 100, created_at => '2026-01-01T00:00:00Z' }, undef);
+  is($rc, 0, 'no_latest_release_marks_latest: exit 0') or diag "$out$err";
+  like($out, qr/^latest=true$/m, 'no_latest_release_marks_latest: empty latest file -> latest=true');
+  # ... and it must not even need created_at on this release
+  ($rc, $out) = check_latest({ id => 100 }, undef);
+  like($out, qr/^latest=true$/m, 'no_latest_release_marks_latest: empty latest file needs no created_at');
+}
+
+{ # same_release_is_marked_latest: same id, even if the dates would say otherwise
+  my ($rc, $out, $err) = check_latest(
+    { id => 100, created_at => '2026-01-01T00:00:00Z' },
+    { id => 100, created_at => '2026-06-01T00:00:00Z' });
+  is($rc, 0, 'same_release_is_marked_latest: exit 0') or diag "$out$err";
+  like($out, qr/^latest=true$/m, 'same_release_is_marked_latest: same id -> latest=true');
+}
+
+{ # prerelease stays false whatever latest says
+  my ($rc, $out) = check_latest(
+    { id => 300, prerelease => 1, created_at => '2026-09-01T00:00:00Z' },
+    { id => 200, created_at => '2026-06-01T00:00:00Z' });
+  like($out, qr/^latest=false$/m, 'latest_rule_prerelease: prerelease with an older latest -> latest=false');
+}
+
+{ # latest_json_without_created_at_fails
+  my ($rc, $out, $err) = check_latest({ id => 100, created_at => '2026-01-01T00:00:00Z' }, { id => 200, tag_name => 'v2.0' });
+  is($rc, 1, 'latest_json_without_created_at_fails: latest without created_at -> exit 1') or diag "$out$err";
+  unlike($out, qr/latest=true/, 'latest_json_without_created_at_fails: no latest=true');
+
+  ($rc, $out, $err) = check_latest({ id => 100 }, { id => 200, created_at => '2026-06-01T00:00:00Z' });
+  is($rc, 1, 'latest_json_without_created_at_fails: this release without created_at (latest present) -> exit 1') or diag "$out$err";
+
+  ($rc, $out, $err) = check_latest({ id => 100, created_at => '2026-01-01T00:00:00Z' }, "this is { not json");
+  is($rc, 1, 'latest_json_without_created_at_fails: latest not valid JSON -> exit 1') or diag "$out$err";
+  unlike($out, qr/latest=true/, 'latest_json_without_created_at_fails: invalid JSON never announces latest=true');
 }
 
 # --- sums -------------------------------------------------------------------

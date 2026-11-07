@@ -1,6 +1,7 @@
 #!/usr/bin/env perl
-# No foreign shared library may be linked by the loader or any object inside
-# the binary; on Linux the highest GLIBC_x.y must stay within the floor.
+# No foreign shared library may be linked by the loader, any object inside the
+# binary, or any object its first start extracts into the PAR cache (libperl, the
+# inner executable); on Linux the highest GLIBC_x.y must stay within the floor.
 #   lib-gate.pl <binary> <linux|macos|windows>
 package DzilBinary::LibGate;
 use strict;
@@ -11,8 +12,10 @@ use File::Find ();
 use File::Spec ();
 use File::Basename ();
 use POSIX ();
+use Time::HiRes ();
 
 our $GLIBC_FLOOR = '2.28';
+our $START_TIMEOUT = 60;   # seconds the start may take before it is killed
 
 my @SYSTEM = (
   linux   => [ 'libc.so*', 'libm.so*', 'libpthread.so*', 'libdl.so*', 'librt.so*',
@@ -21,6 +24,9 @@ my @SYSTEM = (
   windows => [ 'api-ms-*' ],
 );
 my %SYSTEM = @SYSTEM;
+
+# the perl shared library the start must have extracted (matched on the basename)
+my %PERL_LIB = ( linux => 'libperl.so*', macos => 'libperl.dylib', windows => 'perl5*.dll' );
 
 sub glob_re {
   my ($g) = @_;
@@ -105,7 +111,84 @@ sub run_tool {
   close $r; close $er;
   waitpid $pid, 0;
   die "cannot run $cmd[0]: $failed\n" if defined $failed && length $failed;
+  die "$cmd[0] was killed by signal " . ($? & 127) . "\n" if $? & 127;
   return ($out // '', $? >> 8);
+}
+
+# Unix: the child leads its own process group, so a timeout takes the loader's
+# children with it. Dies when the binary cannot be executed (naming it).
+sub spawn_unix {
+  my ($binary, $null) = @_;
+  pipe(my $er, my $ew) or die "pipe: $!\n";   # exec-failure channel, closed on exec
+  my $pid = fork // die "fork: $!\n";
+  if (!$pid) {
+    close $er;
+    my $fail = sub { syswrite $ew, $_[0]; POSIX::_exit(127) };
+    setpgrp(0, 0) or $fail->("setpgrp: $!");
+    open(STDIN, '<', $null) && open(STDOUT, '>', $null) && open(STDERR, '>', $null)
+      or $fail->("cannot open $null: $!");
+    { exec { $binary } $binary, '--help' }
+    $fail->("$!");
+  }
+  close $ew;
+  my $failed = do { local $/; <$er> };
+  close $er;
+  if (defined $failed && length $failed) { waitpid $pid, 0; die "cannot start $binary: $failed\n" }
+  return $pid;
+}
+
+# Win32 (fork is emulated there): spawn with system 1, STDOUT/STDERR pointed at
+# the null device for the call and restored after it. The gate never reads
+# stdin, so it stays on the null device.
+sub spawn_win32 {
+  my ($binary, $null) = @_;
+  open STDIN, '<', $null or die "cannot open $null: $!\n";
+  open my $out, '>&', \*STDOUT or die "cannot dup STDOUT: $!\n";
+  open my $err, '>&', \*STDERR or die "cannot dup STDERR: $!\n";
+  my ($pid, $why);
+  if (open(STDOUT, '>', $null) && open(STDERR, '>', $null)) {
+    $pid = system 1, File::Spec->canonpath($binary), '--help';   # C:/x -> C:\x for CreateProcess
+    $why = "$!";
+  }
+  else { $why = "cannot open $null: $!" }
+  open STDOUT, '>&', $out or die "cannot restore STDOUT: $!\n";
+  open STDERR, '>&', $err or die "cannot restore STDERR: $!\n";
+  die "cannot start $binary: $why\n" unless defined $pid && $pid > 0;
+  return $pid;
+}
+
+# Starts the binary once as the install scripts' warm-up does: <binary> --help,
+# stdin at EOF, output discarded, exit status ignored, the PAR cache in $cache
+# (PAR_GLOBAL_TEMP is the exact cache directory). A start still running after
+# $START_TIMEOUT seconds is killed with its process group (Unix) or process tree
+# (Win32); a timeout alone is not a failure. Dies when it cannot be started.
+sub start_binary {
+  my ($binary, $cache) = @_;
+  local $ENV{PAR_GLOBAL_TEMP} = $cache;
+  my $null = File::Spec->devnull;
+  my $pid = $^O eq 'MSWin32' ? spawn_win32($binary, $null) : spawn_unix($binary, $null);
+  my $deadline = Time::HiRes::time() + $START_TIMEOUT;
+  while (waitpid($pid, POSIX::WNOHANG()) == 0) {
+    if (Time::HiRes::time() >= $deadline) {
+      kill -9, $pid;   # negative signal: Unix the process group $pid leads, Win32 the process tree
+      waitpid $pid, 0;
+      print STDERR "$binary --help timed out after ${START_TIMEOUT}s: killed it with its ",
+        ($^O eq 'MSWin32' ? 'process tree' : 'process group'), "; checking what the cache holds\n";
+      return;
+    }
+    Time::HiRes::sleep(0.1);
+  }
+  return;
+}
+
+# native files anywhere under $dir, whatever their name: [ path, label ], sorted
+sub cache_objects {
+  my ($dir) = @_;
+  my @found;
+  File::Find::find({ no_chdir => 1, wanted => sub {
+    push @found, $File::Find::name if -f $_ && is_native($_);
+  } }, $dir);
+  return map { [ $_, join '/', 'cache', File::Spec->splitdir(File::Spec->abs2rel($_, $dir)) ] } sort @found;
 }
 
 sub capture {
@@ -160,6 +243,7 @@ sub glibc_versions {
 sub run {
   my ($archive, $platform) = @_;
   die "unknown platform '$platform' (linux, macos, windows)\n" unless $SYSTEM{$platform};
+  local $| = 1;   # nothing buffered on STDOUT when run_tool / the start fork
   my $tmp = File::Temp->newdir;
   unpack_archive($archive, "$tmp");
 
@@ -168,15 +252,31 @@ sub run {
     push @objects, $File::Find::name
       if -f $_ && /\.(?:so(?:\.[\d.]+)?|dylib|bundle|dll|pyd)\z/i;
   } }, "$tmp");
-  my @packed = map { $platform eq 'windows' ? lc File::Basename::basename($_) : File::Basename::basename($_) } @objects;
+  my $packed_name = sub { $platform eq 'windows' ? lc File::Basename::basename($_[0]) : File::Basename::basename($_[0]) };
+  my @packed = map { $packed_name->($_) } @objects;
   unshift @objects, $archive if is_native($archive);
   die "no shared objects to check in $archive: the gate proved nothing\n" unless @objects;
 
   my (%links, %glibc);
-  for my $o (@objects) {
-    my $l = linked($platform, $o);
-    $links{ $o eq $archive ? "$archive (loader)" : File::Spec->abs2rel($o, "$tmp") } = $l;
+  my $inspect = sub {
+    my ($o, $label) = @_;
+    $links{$label} = linked($platform, $o);
     $glibc{$_} = 1 for $platform eq 'linux' ? glibc_versions($o) : ();
+  };
+  $inspect->($_, $_ eq $archive ? "$archive (loader)" : File::Spec->abs2rel($_, "$tmp")) for @objects;
+
+  # libperl, the inner executable and PAR's own XS live in the loader, not in the
+  # zip: only a start shows them
+  my $cache = File::Temp->newdir;
+  start_binary($archive, "$cache");
+  my @cached = cache_objects("$cache");
+  print "PAR cache after the start: " . scalar(@cached) . " object(s)\n", map({ "  $_->[1]\n" } @cached);
+  my $perl_re = glob_re($PERL_LIB{$platform});
+  die "the start extracted no perl library into PAR_GLOBAL_TEMP: the gate proved nothing about libperl\n"
+    unless grep { File::Basename::basename($_->[0]) =~ $perl_re } @cached;
+  for my $c (@cached) {
+    $inspect->(@$c);
+    push @packed, $packed_name->($c->[0]);
   }
 
   my @allowed = @{ $SYSTEM{$platform} };
@@ -200,7 +300,7 @@ sub run {
     }
     else { print "highest glibc symbol version: $max (floor $GLIBC_FLOOR)\n" }
   }
-  print "lib-gate $platform: " . scalar(@objects) . " object(s) checked, " . ($fail ? 'FAILED' : 'ok') . "\n";
+  print "lib-gate $platform: " . (@objects + @cached) . " object(s) checked, " . ($fail ? 'FAILED' : 'ok') . "\n";
   return $fail;
 }
 

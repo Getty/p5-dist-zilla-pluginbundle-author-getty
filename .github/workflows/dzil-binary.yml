@@ -398,11 +398,19 @@ jobs:
           mkdir src
           tar xzf tarball/*.tar.gz -C src --strip-components=1
           gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" >release.json
-          latest=$(perl "$p" check src/META.json "$VERSION" assets release.json)
+          # only a 404 means "no latest release yet" (an empty file); any other failure stops here
+          if ! gh api "repos/$GITHUB_REPOSITORY/releases/latest" >latest.json 2>latest.err; then
+            cat latest.err >&2
+            grep -Eq '\(HTTP 404\)$|^gh: HTTP 404$' latest.err || { echo "::error::cannot read releases/latest"; exit 1; }
+            : >latest.json
+          fi
+          latest=$(perl "$p" check src/META.json "$VERSION" assets release.json latest.json)
           perl "$p" sums assets
           perl "$p" render src/META.json "${GITHUB_REPOSITORY%%/*}" "${GITHUB_REPOSITORY#*/}" "$TAG" assets
+          list=$(perl "$p" expected src/META.json "$VERSION")
+          [ -n "$list" ] || { echo "::error::publish.pl expected listed no binaries"; exit 1; }
           files=()
-          while IFS= read -r name; do files+=("assets/$name"); done < <(perl "$p" expected src/META.json "$VERSION")
+          while IFS= read -r name; do files+=("assets/$name"); done <<<"$list"
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" "${files[@]}" assets/SHA256SUMS assets/install.sh assets/install.ps1
           if [ "$latest" = latest=true ]; then
             gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --latest

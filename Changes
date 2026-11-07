@@ -7,7 +7,9 @@
     per binary, and its plugin writes them as "x_binaries" into META.json.
     "binary_default = 0" leaves the subsections out. A binary release is
     published as assets of the GitHub release, so "dzil" now dies at build
-    when "binary" is set together with "no_github" or "no_github_release".
+    when "binary" is set together with "no_github" or "no_github_release",
+    or when the dist has no GitHub remote (which makes "no_github" default
+    to on).
     Dists without "binary" keys are unchanged.
 
   - A GitHub-hosted dist now creates its release as a draft, attaches the
@@ -34,7 +36,12 @@
     They plan the platform legs, assemble the pp command line, gate the
     packed binary on its declared requirements and fail it when it links a
     shared library other than the system ones or needs a glibc newer than
-    2.28. No effect on dists without "binary" keys.
+    2.28. lib-gate.pl also starts each packed binary once (--help, stdin
+    at EOF, a fresh PAR_GLOBAL_TEMP, 60 s bound), checks every native
+    object that first start extracts (libperl, the inner executable, PAR's
+    own XS) like the packed ones, and fails when no perl library was
+    extracted, and a tool it runs (ldd, objdump, otool) that is killed by
+    a signal now fails the gate. No effect on dists without "binary" keys.
 
   - The shared binary release workflow gets its publish-job helper
     .github/dzil-binary/publish.pl (render, expected, sums, check) and the
@@ -54,7 +61,12 @@
     probe run that builds the checked-out commit and touches no release;
     its version slot is "probe-<sha7>". A dist calls it from
     .github/workflows/binaries.yml at @binary-v1. No effect on dists
-    without "binary" keys.
+    without "binary" keys. Its publish job marks a release as latest only
+    when there is no latest release yet or the latest one is not newer, so
+    re-running an older release never rolls releases/latest back, and it
+    fails on an empty list of expected binaries. .gitattributes keeps
+    .github/dzil-binary at LF line endings on every checkout. Archive::Zip
+    is a test requirement.
 
 0.327     2026-10-26 00:40:01Z
 

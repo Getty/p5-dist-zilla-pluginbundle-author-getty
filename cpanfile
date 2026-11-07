@@ -30,6 +30,7 @@ requires 'Pod::Weaver', '4.022';
 requires 'Pod::Weaver::Section::Support', '1.014';
 
 on test => sub {
+  requires 'Archive::Zip';
   requires 'Test::More', '1.302226';
 };
 

@@ -3,7 +3,8 @@
 #   publish.pl render   <META.json> <owner> <repo> <tag> <dir>  -> <dir>/install.sh, <dir>/install.ps1
 #   publish.pl expected <META.json> <version>                   -> expected asset names, one per line
 #   publish.pl sums     <dir>                                    -> <dir>/SHA256SUMS over the binaries found there
-#   publish.pl check    <META.json> <version> <dl-dir> <release-json>
+#   publish.pl check    <META.json> <version> <dl-dir> <release-json> <latest-json>
+#                       <latest-json>: the releases/latest response, empty when that answered 404
 package DzilBinary::Publish;
 use strict;
 use warnings;
@@ -111,7 +112,7 @@ sub sums {
 }
 
 sub check {
-  my ($meta_file, $version, $dl, $release_file) = @_;
+  my ($meta_file, $version, $dl, $release_file, $latest_file) = @_;
   my $meta = read_meta($meta_file);
   my @want = expected_names($meta->{x_binaries}, $version);
   my $rel = eval { JSON::PP->new->decode(slurp($release_file)) };
@@ -121,7 +122,31 @@ sub check {
   push @bad, map { "missing binary: $_" } grep { !-f File::Spec->catfile($dl, $_) } @want;
   push @bad, map { "release already has asset: $_" } grep { $have{$_} } @want;
   if (@bad) { print STDERR "$_\n" for @bad; return 1 }
-  print 'latest=', ($rel->{prerelease} ? 'false' : 'true'), "\n";
+  print 'latest=', (latest_rule($rel, $latest_file) ? 'true' : 'false'), "\n";
+  return 0;
+}
+
+# Never rolls releases/latest back: GitHub orders "latest" by created_at, so an
+# older release finishing (or re-run) after a newer one is not marked latest.
+sub latest_rule {
+  my ($rel, $latest_file) = @_;
+  return 0 if $rel->{prerelease};
+  my $raw = slurp($latest_file);
+  return 1 unless length $raw;   # 404: no latest release yet
+  my $latest = eval { JSON::PP->new->decode($raw) };
+  die "$latest_file is not valid JSON: $@" unless ref $latest eq 'HASH';
+  return 1 if defined $rel->{id} && defined $latest->{id} && $rel->{id} eq $latest->{id};
+  my %at;
+  for ([ this => $rel, 'the release' ], [ latest => $latest, $latest_file ]) {
+    my ($k, $r, $what) = @$_;
+    my $t = $r->{created_at};
+    die "$what has no created_at\n" unless defined $t && !ref $t;
+    die "$what has created_at '$t', not YYYY-MM-DDThh:mm:ssZ\n" unless $t =~ /\A\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\z/;
+    $at{$k} = $t;
+  }
+  return 1 if $at{latest} le $at{this};
+  print STDERR 'not marking latest: ', ($latest->{tag_name} // "release $latest->{id}"),
+    " (created $at{latest}) is newer than this release (created $at{this})\n";
   return 0;
 }
 
@@ -135,7 +160,7 @@ sub main {
       0;
     }
     elsif ($cmd eq 'sums'     && @a == 1) { sums(@a) }
-    elsif ($cmd eq 'check'    && @a == 4) { check(@a) }
+    elsif ($cmd eq 'check'    && @a == 5) { check(@a) }
     else { die "usage: publish.pl render|expected|sums|check ...\n" }
   };
   if (!defined $rc) { print STDERR $@; return 1 }

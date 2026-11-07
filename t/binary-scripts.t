@@ -434,9 +434,17 @@ sub objdump_versions {
   return join "\n", (map { qq{echo "0000 g DF .text 0000 GLIBC_$_ memcpy"} } @v), "exit $exit";
 }
 
+# A startable fake binary (see fake_binary below) whose start extracts only the
+# platform's perl library into PAR_GLOBAL_TEMP, the way the real loader does.
+# Under F2 the gate starts <binary>, so a bare .zip no longer works as one.
+sub startable {
+  my ($path, $perl_lib, @members) = @_;
+  return fake_binary($path, qq{/bin/mkdir -p "\$PAR_GLOBAL_TEMP/c" || exit 9\nprintf "\\177ELF" > "\$PAR_GLOBAL_TEMP/c/$perl_lib"}, @members);
+}
+
 { # controls: the fake-tool setup itself works, so the red tests below measure the gate
   my $d = tempdir(CLEANUP => 1);
-  my $zip = make_zip("$d/a.zip", 'shlib/libperl.so' => 'x');
+  my $zip = startable("$d/a", 'libperl.so.5.40', 'shlib/libperl.so' => 'x');
   my $bin = fake_tools("$d/ok", ldd => $LDD_LIBC, objdump => objdump_versions(0, '2.17', '2.5'));
   my ($rc, $out) = gate($zip, 'linux', $bin);
   is($rc, 0, 'gate_control_ok: libc only + GLIBC_2.17 -> exit 0') or diag $out;
@@ -450,7 +458,7 @@ sub objdump_versions {
 
 { # I1: a missing tool is a failure that names the tool
   my $d = tempdir(CLEANUP => 1);
-  my $zip = make_zip("$d/a.zip", 'shlib/libperl.so' => 'x');
+  my $zip = startable("$d/a", 'libperl.so.5.40', 'shlib/libperl.so' => 'x');
 
   my $none = fake_tools("$d/none");
   my ($rc, $out) = gate($zip, 'linux', $none);
@@ -487,7 +495,7 @@ sub objdump_versions {
 
 { # I2: the glibc check must have run on linux
   my $d = tempdir(CLEANUP => 1);
-  my $zip = make_zip("$d/a.zip", 'shlib/libperl.so' => 'x');
+  my $zip = startable("$d/a", 'libperl.so.5.40', 'shlib/libperl.so' => 'x');
   my $bin = fake_tools("$d/bin", ldd => $LDD_LIBC, objdump => 'exit 0');
   my ($rc, $out) = gate($zip, 'linux', $bin);
   isnt($rc, 0, 'glibc_check_did_not_run: objdump -T lists no GLIBC_ version -> non-zero exit');
@@ -514,11 +522,11 @@ sub objdump_versions {
     'case "$f" in *Raw.bundle) printf \'\t/opt/homebrew/lib/libssl.3.dylib (compatibility version 3.0.0)\n\';; esac',
     'printf \'\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\n\'';
   my $bin = fake_tools("$d/bin", otool => $otool);
-  my $packed = make_zip("$d/packed.zip",
+  my $packed = startable("$d/packed", 'libperl.dylib',
     'lib/auto/Git/Raw/Raw.bundle' => 'x', 'lib/auto/libssl.3.dylib' => 'x');
   my ($rc, $out) = gate($packed, 'macos', $bin);
   is($rc, 0, 'macos_absolute_name_packed: /opt/homebrew/lib/libssl.3.dylib with libssl.3.dylib packed -> exit 0') or diag $out;
-  my $unpacked = make_zip("$d/unpacked.zip", 'lib/auto/Git/Raw/Raw.bundle' => 'x');
+  my $unpacked = startable("$d/unpacked", 'libperl.dylib', 'lib/auto/Git/Raw/Raw.bundle' => 'x');
   ($rc, $out) = gate($unpacked, 'macos', $bin);
   is($rc, 1, 'macos_absolute_name_unpacked: same link, dylib not packed -> exit 1');
   like($out, qr/libssl\.3\.dylib/, 'macos_absolute_name_unpacked: names the library');
@@ -564,11 +572,211 @@ sub objdump_versions {
     'case "$f" in *a.dll) printf \'\tDLL Name: KERNEL32.dll\n\tDLL Name: api-ms-win-crt-runtime-l1-1-0.dll\n\';; esac',
     'case "$f" in *b.dll) printf \'\tDLL Name: libssl-3-x64.dll\n\';; esac';
   my $bin = fake_tools("$d/bin", objdump => $objdump);
-  my ($rc, $out) = gate(make_zip("$d/ok.zip", 'lib/auto/a.dll' => 'x'), 'windows', $bin, SystemRoot => "$d/win");
+  my ($rc, $out) = gate(startable("$d/ok", 'perl540.dll', 'lib/auto/a.dll' => 'x'), 'windows', $bin, SystemRoot => "$d/win");
   is($rc, 0, 'windows_cli_system: kernel32 (System32) + api-ms-* -> exit 0') or diag $out;
-  ($rc, $out) = gate(make_zip("$d/bad.zip", 'lib/auto/a.dll' => 'x', 'lib/auto/b.dll' => 'x'), 'windows', $bin, SystemRoot => "$d/win");
+  ($rc, $out) = gate(startable("$d/bad", 'perl540.dll', 'lib/auto/a.dll' => 'x', 'lib/auto/b.dll' => 'x'), 'windows', $bin, SystemRoot => "$d/win");
   is($rc, 1, 'windows_cli_foreign: libssl-3-x64.dll linked by b.dll -> exit 1');
   like($out, qr/libssl-3-x64\.dll/, 'windows_cli_foreign: names it');
+}
+
+# --- final fix wave F2: lib-gate also checks what the binary extracts on its start --
+# Linux only (fake ldd/objdump, a /bin/sh "binary", /bin/mkdir, /bin/sleep).
+#
+# The fake binary is a /bin/sh script followed by a zip: "#!/bin/sh\n<script>\nexit 0\n"
+# . <zip bytes>. Archive::Zip finds the end-of-central-directory record from the end and
+# copes with the prefix (as it does for a PAR executable), and the kernel runs the
+# shebang, so one file is both the archive lib-gate unpacks and the executable it starts.
+# The script records argv / PAR_GLOBAL_TEMP / stdin into $REC and drops fake ELF objects
+# into $PAR_GLOBAL_TEMP, the way the real loader extracts its cache.
+
+sub fake_binary {
+  my ($path, $script, @members) = @_;
+  my $zip = make_zip("$path.zip", @members);
+  spew($path, "#!/bin/sh\n$script\nexit 0\n" . slurp($zip));
+  chmod 0755, $path;
+  return $path;
+}
+
+# what a loader leaves in the cache: libperl.so.5.40, an extension, and the inner
+# executable "abc123def" (no extension) which links the extracted libperl
+my $DROP_CACHE = <<'SH';
+C="$PAR_GLOBAL_TEMP/cache-test"
+/bin/mkdir -p "$C/inc/lib/auto/X" || exit 9
+printf '\177ELFperl' > "$C/inc/lib/libperl.so.5.40"
+printf '\177ELFext'  > "$C/inc/lib/auto/X/X.so"
+printf '\177ELFpar'  > "$C/abc123def"
+SH
+my $DROP_CACHE_NO_PERL = $DROP_CACHE =~ s/^printf .*libperl.*\n//mr;
+
+my $RECORD = <<'SH';
+echo "$*" > "$REC/argv"
+echo "$PAR_GLOBAL_TEMP" > "$REC/par"
+n=0
+for f in "$PAR_GLOBAL_TEMP"/* "$PAR_GLOBAL_TEMP"/.[!.]*; do [ -e "$f" ] && n=$((n+1)); done
+echo "$n" > "$REC/entries_at_start"
+if read -r line; then echo "DATA:$line" > "$REC/stdin"; else echo EOF > "$REC/stdin"; fi
+SH
+
+# ldd per object: X.so links $x_links extra, abc123def links the extracted libperl
+sub start_tools {
+  my ($bindir, %o) = @_;
+  my $x   = $o{x_ldd} ? qq{printf '\\t$o{x_ldd} => /lib64/$o{x_ldd} (0x00007f0000000000)\\n'} : ':';
+  my $ldd = join "\n",
+    'case "$1" in',
+    qq{  *abc123def) $LDD_LIBC; printf '\\tlibperl.so.5.40 => /x/libperl.so.5.40 (0x00007f0000000000)\\n';;},
+    qq{  *X.so) $LDD_LIBC; $x;;},
+    qq{  *) $LDD_LIBC;;},
+    'esac';
+  my $od = join "\n",
+    'case "$2" in',
+    ($o{par_glibc} ? qq{  *abc123def) echo "0000 g DF .text 0000 GLIBC_$o{par_glibc} memcpy";;} : ()),
+    '  *) echo "0000 g DF .text 0000 GLIBC_2.17 memcpy";;',
+    'esac';
+  return fake_tools($bindir, ldd => $ldd, objdump => $od);
+}
+
+# gate on a fake binary; returns (rc, stdout . stderr, $rec_dir)
+sub start_gate {
+  my (%o) = @_;
+  my $d = tempdir(CLEANUP => 1);
+  my $rec = "$d/rec"; File::Path::make_path($rec);
+  my $bin = fake_binary("$d/prog", ($o{script} // ($RECORD . $DROP_CACHE)),
+    'lib/auto/Zip/Zip.so' => 'x');
+  chmod 0644, $bin if $o{not_executable};
+  my $tools = start_tools("$d/tools", %o);
+  my ($rc, $out) = gate($bin, 'linux', $tools, REC => $rec);
+  return ($rc, $out, $rec, $bin);
+}
+
+# lib-gate with a lowered START_TIMEOUT, in a forked child (the variable is a package var)
+sub start_gate_timeout {
+  my ($timeout, %o) = @_;
+  my $d = tempdir(CLEANUP => 1);
+  my $rec = "$d/rec"; File::Path::make_path($rec);
+  my $bin = fake_binary("$d/prog", $o{script}, 'lib/auto/Zip/Zip.so' => 'x');
+  my $tools = start_tools("$d/tools", %o);
+  my $outf = "$d/gate.out";
+  my $t0 = time;
+  my $pid = fork // die "fork: $!";
+  if (!$pid) {
+    $ENV{PATH} = $tools; $ENV{REC} = $rec;
+    open STDOUT, '>', $outf or die; open STDERR, '>&', \*STDOUT or die;
+    { no warnings 'once'; $DzilBinary::LibGate::START_TIMEOUT = $timeout; }
+    my $rc = DzilBinary::LibGate::main($bin, 'linux');
+    require POSIX; POSIX::_exit($rc);
+  }
+  waitpid $pid, 0;
+  return ($? >> 8, scalar(slurp($outf)), $rec, time - $t0);
+}
+
+sub rec { my ($rec, $f) = @_; my $c = -e "$rec/$f" ? slurp("$rec/$f") : ''; $c =~ s/\n\z//; return $c }
+
+{ # the gate starts the binary: --help, stdin at EOF, PAR_GLOBAL_TEMP = fresh empty dir
+  my ($rc, $out, $rec) = start_gate();
+  is($rc, 0, 'gate_start_control_ok: cache with libperl + system libs only -> exit 0') or diag $out;
+  is(rec($rec, 'argv'), '--help', 'gate_start_invocation: the binary is started with --help and nothing else');
+  is(rec($rec, 'stdin'), 'EOF', 'gate_start_invocation: stdin is at EOF (does not wait on the terminal)');
+  my $par = rec($rec, 'par');
+  isnt($par, '', 'gate_start_invocation: PAR_GLOBAL_TEMP is set for the start');
+  is(rec($rec, 'entries_at_start'), '0', 'gate_start_invocation: PAR_GLOBAL_TEMP is a fresh, empty directory at start');
+  like($out, qr/abc123def/, 'gate_start_lists_cache_objects: output lists the inner executable found in the cache');
+  like($out, qr/libperl\.so\.5\.40/, 'gate_start_lists_cache_objects: output lists the extracted libperl');
+}
+
+{ # a foreign lib linked by an object the start extracted fails the gate
+  my ($rc, $out) = start_gate(x_ldd => 'libcrypt.so.1');
+  is($rc, 1, 'gate_start_cache_foreign_lib_fails: libcrypt.so.1 linked by a cached object -> exit 1');
+  like($out, qr/libcrypt\.so\.1/, 'gate_start_cache_foreign_lib_fails: names the foreign library');
+  like($out, qr/X\.so/, 'gate_start_cache_foreign_lib_fails: names the cached object that links it');
+  unlike($out, qr/libperl\.so\.5\.40 \(linked/, 'gate_start_cache_foreign_lib_fails: the extracted libperl linked by the inner executable is not blamed');
+}
+
+{ # glibc floor applies to the cache objects too
+  my ($rc, $out) = start_gate(par_glibc => '2.29');
+  is($rc, 1, 'gate_start_cache_glibc_over_floor_fails: GLIBC_2.29 in a cached object -> exit 1');
+  like($out, qr/2\.29/, 'gate_start_cache_glibc_over_floor_fails: names 2.29');
+}
+
+{ # no perl shared library in the cache: the gate proved nothing about libperl
+  my ($rc, $out) = start_gate(script => $RECORD . $DROP_CACHE_NO_PERL);
+  isnt($rc, 0, 'gate_start_no_perl_library_fails: no libperl in the cache -> non-zero exit');
+  unlike($out, qr/, ok\b/, 'gate_start_no_perl_library_fails: never reports ok');
+  like($out, qr/PAR_GLOBAL_TEMP/, 'gate_start_no_perl_library_fails: message names PAR_GLOBAL_TEMP');
+  like($out, qr/libperl/, 'gate_start_no_perl_library_fails: message names libperl');
+}
+
+{ # a start that extracts nothing at all fails the same way
+  my ($rc, $out) = start_gate(script => 'true');
+  isnt($rc, 0, 'gate_start_empty_cache_fails: binary extracts nothing -> non-zero exit');
+  like($out, qr/PAR_GLOBAL_TEMP|libperl/, 'gate_start_empty_cache_fails: message names PAR_GLOBAL_TEMP / libperl');
+}
+
+{ # a binary that cannot be spawned is a failure, not a skip
+  my ($rc, $out, undef, $bin) = start_gate(not_executable => 1);
+  isnt($rc, 0, 'gate_start_spawn_fails: a binary that cannot be executed -> non-zero exit');
+  unlike($out, qr/, ok\b/, 'gate_start_spawn_fails: never reports ok');
+  like($out, qr/\Q$bin\E/, 'gate_start_spawn_fails: names the binary that could not be started');
+  unlike($out, qr/PAR_GLOBAL_TEMP/, 'gate_start_spawn_fails: fails on the spawn, not by falling through to the empty-cache message');
+}
+
+# a binary that extracts its cache, then never exits (the child holds on too, to see the
+# whole process group go)
+my $HANG = $RECORD . $DROP_CACHE . <<'SH';
+echo $$ > "$REC/pid"
+/bin/sleep 25 &
+echo $! > "$REC/child"
+wait
+SH
+
+sub dead {
+  my ($pid) = @_;
+  for (1 .. 20) { return 1 unless kill 0, $pid; select undef, undef, undef, 0.1 }
+  return 0;
+}
+
+{ # timeout alone is not a failure; the process (group) is killed; the cache is still evaluated
+  my ($rc, $out, $rec, $secs) = start_gate_timeout(2, script => $HANG);
+  is($rc, 0, 'gate_start_timeout_not_a_failure: a binary that never exits -> gate still evaluates the cache, exit 0') or diag $out;
+  cmp_ok($secs, '<', 20, 'gate_start_timeout_not_a_failure: gate returned long before the binary would have');
+  like($out, qr/time/i, 'gate_start_timeout_not_a_failure: a notice about the timeout is printed');
+  like($out, qr/abc123def/, 'gate_start_timeout_not_a_failure: the cache objects are still listed');
+  my ($pid, $child) = (rec($rec, 'pid'), rec($rec, 'child'));
+  my $pid_gone   = $pid   ? dead($pid)   : 0;
+  my $child_gone = $child ? dead($child) : 0;
+  ok($pid_gone,   'gate_start_timeout_kills: the hung binary was started and is gone');
+  ok($child_gone, 'gate_start_timeout_kills: its child is gone too (process group killed)');
+  kill 'KILL', $_ for grep { $_ } $pid, $child;   # never leave a sleeper behind
+}
+
+{ # ... and after a timeout the cache check still fails a foreign lib
+  my ($rc, $out, $rec) = start_gate_timeout(2, script => $HANG, x_ldd => 'libcrypt.so.1');
+  is($rc, 1, 'gate_start_timeout_still_checks_cache: timeout + foreign lib in the cache -> exit 1');
+  like($out, qr/libcrypt\.so\.1/, 'gate_start_timeout_still_checks_cache: names the foreign library');
+  for my $f (qw( pid child )) { my $p = rec($rec, $f); kill 'KILL', $p if $p }
+}
+
+{ # no perl library after a timeout is still a failure
+  my ($rc, $out, $rec) = start_gate_timeout(2, script => $RECORD . $DROP_CACHE_NO_PERL . "/bin/sleep 25 &\necho \$! > \"\$REC/child\"\nwait\n");
+  isnt($rc, 0, 'gate_start_timeout_no_perl_fails: timeout + no libperl in the cache -> non-zero exit');
+  like($out, qr/libperl|PAR_GLOBAL_TEMP/, 'gate_start_timeout_no_perl_fails: names libperl / PAR_GLOBAL_TEMP');
+  my $p = rec($rec, 'child'); kill 'KILL', $p if $p;
+}
+
+# --- run_tool: a signal is not exit 0 ----------------------------------------
+
+{
+  my ($out, $rc) = DzilBinary::LibGate::run_tool(0, '/bin/sh', '-c', 'exit 3');
+  is($rc, 3, 'run_tool_exit_code: a plain exit 3 is still reported as 3');
+
+  my @r = eval { DzilBinary::LibGate::run_tool(0, '/bin/sh', '-c', 'kill -TERM $$') };
+  my $err = $@;
+  if ($err ne '') {
+    like($err, qr/signal|TERM|\b15\b/i, 'run_tool_signal: died, and the message names the signal');
+  }
+  else {
+    is($r[1], 128 + 15, 'run_tool_signal: a tool killed by SIGTERM is reported as 128+15, not exit 0');
+  }
+  ok($err ne '' || $r[1] != 0, 'run_tool_signal: a tool killed by a signal is a failure (not exit 0)');
 }
 
 # --- fix round 1: require-gate glob must count modules, not any member -------
