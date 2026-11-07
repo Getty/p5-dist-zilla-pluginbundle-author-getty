@@ -164,9 +164,25 @@ deps() {
   }
 }
 
+# The packing perl's pp: the local lib's when deps installed PAR::Packer there,
+# else the one in the perl's own site script dir (Strawberry ships PAR::Packer,
+# so cpanm finds it up to date and installs nothing locally). Never a pp on PATH.
+# Prints the pp, or fails printing the directories it looked in.
+pp_script() {
+  perl -MConfig -e '
+    my %seen;
+    my @dirs = grep { defined && length && !$seen{$_}++ }
+      @ARGV, @Config{qw(installsitescript installsitebin)};
+    for (@dirs) { if (-f "$_/pp") { print "$_/pp"; exit 0 } }
+    print join ", ", @dirs;
+    exit 1;
+  ' "$LOCAL/bin"
+}
+
 pack() {
-  local name out a args list dist
+  local name out a args list dist pp
   leg_env lib
+  pp=$(pp_script) || die "the packing perl has no pp in: $pp"
   names
   for name in "${NAMES[@]}"; do
     out=$OUT/$name-$VERSION-$PLATFORM$exe
@@ -174,8 +190,8 @@ pack() {
     args=()
     while IFS= read -r -d '' a; do args+=("$a"); done <"$TOP/pp-args.bin"
     rm -f "$TOP/pp-args.bin"
-    echo "+ pp ${args[*]}"
-    ( cd "$DIST" && PAR_VERBATIM=1 perl "$LOCAL/bin/pp" "${args[@]}" )
+    echo "+ perl $pp ${args[*]}"
+    ( cd "$DIST" && PAR_VERBATIM=1 perl "$pp" "${args[@]}" )
     [ -f "$out" ] || die "pp wrote no $out"
     perl "$HERE/lib-gate.pl" "$out" "$os"
     list=$(meta require "$name")
