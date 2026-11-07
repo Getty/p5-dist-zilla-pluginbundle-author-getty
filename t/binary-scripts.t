@@ -22,6 +22,7 @@ my %pkg = (
   'pp-args.pl'      => 'DzilBinary::PPArgs',
   'require-gate.pl' => 'DzilBinary::RequireGate',
   'lib-gate.pl'     => 'DzilBinary::LibGate',
+  'win-dlls.pl'     => 'DzilBinary::WinDlls',
 );
 
 # --- helpers ---------------------------------------------------------------
@@ -907,5 +908,190 @@ sub dead {
   is($err, "/bin/sh was killed by signal 15\n", 'run_tool_win32_signal: a signalled tool dies naming the signal');
 }
 # untested: run_tool_win32 "cannot wait for <cmd>" ($? == -1 after close) -- not reachable from a test.
+
+# --- win-dlls.pl and the lib-gate.pl split it uses -------------------------
+# build-leg.sh (which calls win-dlls.pl on the Windows leg only) has no harness:
+# it is covered only by the controller's Windows probe.
+
+{ # foreign(): the distinct names violations() flags, sorted, case-insensitive on packed
+  my %links = (a => ['x.dll', 'KERNEL32.dll'], b => ['x.dll', 'y.dll']);
+  is_deeply([DzilBinary::LibGate::foreign(\%links, ['KERNEL32.dll'], [])], ['x.dll', 'y.dll'],
+    'foreign: distinct names, sorted, allowlisted one left out');
+  is_deeply([DzilBinary::LibGate::foreign(\%links, ['KERNEL32.dll'], ['X.DLL'])], ['y.dll'],
+    'foreign: a packed name covers case-insensitively');
+  is_deeply([DzilBinary::LibGate::foreign({}, [], [])], [], 'foreign: no links -> nothing');
+
+  for my $case (
+    [\%links, ['KERNEL32.dll'], []],
+    [\%links, ['KERNEL32.dll'], ['X.DLL']],
+    [\%links, [], ['y.dll', 'kernel32.dll']],
+    [{ o => ['/usr/local/lib/libssl.3.dylib', 'libc.so.6'], p => ['libc.so.6', 'libz.so.1'] }, ['libc.so*'], ['libssl.3.dylib']],
+    [{ o => ['api-ms-win-core-x.dll', 'foo.dll'] }, ['api-ms-*'], []],
+  ) {
+    my ($l, $a, $p) = @$case;
+    my %from_v = map { /\A(\S+) \(linked by / ? ($1 => 1) : () } DzilBinary::LibGate::violations($l, $a, $p);
+    is_deeply([sort keys %from_v], [DzilBinary::LibGate::foreign($l, $a, $p)],
+      'foreign agrees with violations: ' . join(',', DzilBinary::LibGate::foreign($l, $a, $p)) );
+  }
+}
+
+{ # covered(): allowlist glob, packed basename, packed name under a path
+  my $c = DzilBinary::LibGate::covered(['api-ms-*'], ['libssl.3.dylib', 'Foo.DLL']);
+  ok($c->('api-ms-win-crt-runtime-l1-1-0.dll'), 'covered: an allowlist glob match');
+  ok($c->('libssl.3.dylib'), 'covered: a packed basename');
+  ok($c->('/usr/local/lib/libssl.3.dylib'), 'covered: a packed name under a path');
+  ok($c->('foo.dll'), 'covered: packed matching is case-insensitive');
+  ok(!$c->('libcrypto.3.dylib'), 'covered: neither allowed nor packed -> false');
+  ok(!$c->('/usr/local/lib/libcrypto.3.dylib'), 'covered: a path whose basename is not packed -> false');
+}
+
+{ # allowlist(): the platform set, plus on Windows the linked names System32 holds
+  my $d = tempdir(CLEANUP => 1);
+  spew("$d/System32/kernel32.dll", 'x');
+  local $ENV{SystemRoot} = $d;
+  my %links = (o => ['kernel32.dll', 'foo.dll']);
+  is_deeply([DzilBinary::LibGate::allowlist('windows', \%links)], ['api-ms-*', 'kernel32.dll'],
+    'allowlist_windows: api-ms-* plus only the linked names System32 holds');
+  is_deeply([DzilBinary::LibGate::allowlist('windows', { o => ['foo.dll'] })], ['api-ms-*'],
+    'allowlist_windows: no System32 name linked -> only api-ms-*');
+  is_deeply([DzilBinary::LibGate::allowlist('linux', \%links)], [@LINUX_SYSTEM],
+    'allowlist_linux: exactly the Linux system set, whatever is linked');
+  is_deeply([DzilBinary::LibGate::allowlist('linux', { o => ['kernel32.dll'] })], [@LINUX_SYSTEM],
+    'allowlist_linux: a System32-looking name adds nothing');
+}
+
+{ # index_dirs(): lower-cased name => path, first directory wins, disk spelling kept
+  my $d = tempdir(CLEANUP => 1);
+  spew("$d/one/LibSSL.dll", 'x');
+  spew("$d/two/libssl.dll", 'x');
+  spew("$d/two/z.dll", 'x');
+  spew("$d/two/sub/deep.dll", 'x');
+  my $err = '';
+  my $at = do {
+    local *STDERR;
+    open STDERR, '>', \$err or die;
+    DzilBinary::WinDlls::index_dirs("$d/one", "$d/missing", "$d/two");
+  };
+  is_deeply($at, { 'libssl.dll' => "$d/one/LibSSL.dll", 'z.dll' => "$d/two/z.dll" },
+    'index_dirs: first dir wins, disk spelling kept, subdirectories not indexed');
+  like($err, qr/\Awin-dlls: cannot read \Q$d\E\/missing: /, 'index_dirs: an unreadable directory is named on STDERR');
+}
+
+{ # resolve(): transitive, per-DLL linked() call, packed names skipped, missing named
+  my $d = tempdir(CLEANUP => 1);
+  spew("$d/System32/$_", 'x') for qw( kernel32.dll ws2_32.dll );
+  local $ENV{SystemRoot} = $d;
+  my %imports = (
+    'libssl.dll'    => ['libcrypto.dll', 'kernel32.dll'],
+    'libcrypto.dll' => ['zlib1.dll', 'ws2_32.dll', 'libwinpthread-1.dll'],
+    'zlib1.dll'     => ['kernel32.dll'],
+    'libwinpthread-1.dll' => ['libgcc_s_seh-1.dll'],
+  );
+  my %calls;
+  no warnings qw( redefine once );
+  local *DzilBinary::LibGate::linked = sub { $calls{ File::Basename::basename($_[1]) }++; return $imports{ File::Basename::basename($_[1]) } };
+  my %at = map { $_ => "$d/dl/$_" } qw( libssl.dll libcrypto.dll zlib1.dll libwinpthread-1.dll libgcc_s_seh-1.dll );
+  my %links = ('lib/auto/S/S.xs.dll' => ['libssl.dll', 'kernel32.dll']);
+
+  my ($found, $missing) = DzilBinary::WinDlls::resolve(\%links, ['libwinpthread-1.dll'], \%at);
+  is_deeply($found, [sort map { $at{$_} } qw( libssl.dll libcrypto.dll zlib1.dll )],
+    'resolve: libssl -> libcrypto -> zlib1 found transitively, sorted');
+  is_deeply($missing, [], 'resolve: nothing missing');
+  is_deeply(\%calls, { 'libssl.dll' => 1, 'libcrypto.dll' => 1, 'zlib1.dll' => 1 },
+    'resolve: linked() once per found DLL; a packed name (even in %at) is never inspected or returned');
+
+  my %at2 = %at; delete $at2{'zlib1.dll'};
+  ($found, $missing) = DzilBinary::WinDlls::resolve(\%links, ['libwinpthread-1.dll'], \%at2);
+  is_deeply($found, [sort map { $at{$_} } qw( libssl.dll libcrypto.dll )], 'resolve_missing: the rest is still found');
+  is_deeply($missing, ['zlib1.dll'], 'resolve_missing: the name found nowhere is reported');
+
+  %calls = ();
+  ($found, $missing) = DzilBinary::WinDlls::resolve({ o => ['kernel32.dll'] }, [], \%at);
+  is_deeply([$found, $missing], [[], []], 'resolve_nothing: no foreign name -> ([], [])');
+  is_deeply(\%calls, {}, 'resolve_nothing: linked() never called');
+
+  %calls = ();
+  ($found, $missing) = DzilBinary::WinDlls::resolve(
+    { 'a.dll' => ['libssl.dll'], 'b.dll' => ['libssl.dll'], 'c.dll' => ['LIBSSL.dll'] }, ['libcrypto.dll'], \%at);
+  is_deeply($found, [$at{'libssl.dll'}], 'resolve_shared: several objects importing one DLL list it once');
+  is($calls{'libssl.dll'}, 1, 'resolve_shared: linked() once for it');
+
+  ($found, $missing) = DzilBinary::WinDlls::resolve({ o => ['libssl.dll'] }, ['LIBSSL.DLL'], \%at);
+  is_deeply([$found, $missing], [[], []], 'resolve_packed_case: a packed name covers case-insensitively');
+}
+
+# CLI: fake objdump keyed by the object's basename, SystemRoot with kernel32/ws2_32
+my $WIN_OBJDUMP = join "\n", 'f=${2##*/}',
+  'case "$f" in',
+  '  SSLeay.xs.dll) printf \'\tDLL Name: libssl-3-x64__.dll\n\tDLL Name: KERNEL32.dll\n\' ;;',
+  '  libssl-3-x64__.dll) printf \'\tDLL Name: libcrypto-3-x64__.dll\n\tDLL Name: KERNEL32.dll\n\' ;;',
+  '  libcrypto-3-x64__.dll) printf \'\tDLL Name: zlib1__.dll\n\tDLL Name: WS2_32.dll\n\tDLL Name: perl540.dll\n\' ;;',
+  '  zlib1__.dll) printf \'\tDLL Name: KERNEL32.dll\n\' ;;',
+  '  ghost.xs.dll) printf \'\tDLL Name: libghost-1.dll\n\' ;;',
+  'esac';
+
+sub win_fixture {
+  my ($d) = @_;
+  spew("$d/win/System32/$_", 'x') for qw( kernel32.dll ws2_32.dll );
+  for my $p (['d1', 'libssl-3-x64__.dll'], ['d2', 'libcrypto-3-x64__.dll'], ['d2', 'zlib1__.dll']) {
+    spew("$d/$p->[0]/$p->[1]", 'x');
+  }
+  return fake_tools("$d/bin", objdump => $WIN_OBJDUMP);
+}
+
+{ # win-dlls.pl CLI
+  my $d = tempdir(CLEANUP => 1);
+  my $bin = win_fixture($d);
+  my %env = (PATH => $bin, SystemRoot => "$d/win");
+
+  my $ssl = startable("$d/ssl", 'perl540.dll', 'lib/auto/Net/SSLeay/SSLeay.xs.dll' => 'x');
+  my ($rc, $out, $err) = run_script_env(\%env, 'win-dlls.pl', $ssl, "$d/d1", "$d/d2");
+  is($rc, 0, 'windlls_cli_foreign: exit 0');
+  is($out, join('', map { "$_\n" } sort "$d/d1/libssl-3-x64__.dll", "$d/d2/libcrypto-3-x64__.dll", "$d/d2/zlib1__.dll"),
+    'windlls_cli_foreign: ssl (dir 1), crypto and zlib (dir 2), found transitively, one path per line, sorted');
+  is($err, '', 'windlls_cli_foreign: empty STDERR');
+
+  my $clean = startable("$d/clean", 'perl540.dll', 'lib/auto/Clean/Clean.xs.dll' => 'x');
+  ($rc, $out, $err) = run_script_env(\%env, 'win-dlls.pl', $clean, "$d/d1", "$d/d2");
+  is_deeply([$rc, $out, $err], [0, '', ''], 'windlls_cli_clean: exit 0, empty STDOUT and STDERR');
+
+  my $ghost = startable("$d/ghost", 'perl540.dll', 'lib/auto/Ghost/ghost.xs.dll' => 'x');
+  mkdir "$d/elsewhere"; spew("$d/elsewhere/libghost-1.dll", 'x');
+  ($rc, $out, $err) = run_script_env(\%env, 'win-dlls.pl', $ghost, "$d/d1", "$d/d2");
+  is($rc, 0, 'windlls_cli_unresolvable: exit 0');
+  unlike($out, qr/ghost/, 'windlls_cli_unresolvable: the name (or a copy elsewhere) is not on STDOUT');
+  like($err, qr/win-dlls: in none of \Q$d\E\/d1, \Q$d\E\/d2: libghost-1\.dll \(lib-gate\.pl fails them\)/,
+    'windlls_cli_unresolvable: named on STDERR');
+
+  my $shlib = 'shlib/MSWin32-x64-multi-thread';
+  my $done = startable("$d/done", 'perl540.dll', 'lib/auto/Net/SSLeay/SSLeay.xs.dll' => 'x',
+    "$shlib/libssl-3-x64__.dll" => 'x', "$shlib/libcrypto-3-x64__.dll" => 'x', "$shlib/zlib1__.dll" => 'x');
+  ($rc, $out, $err) = run_script_env(\%env, 'win-dlls.pl', $done, "$d/d1", "$d/d2");
+  is_deeply([$rc, $out], [0, ''], 'windlls_cli_relinked: DLLs already under shlib/ -> nothing listed');
+  my ($grc, $gout) = gate($done, 'windows', $bin, SystemRoot => "$d/win");
+  is($grc, 0, 'windlls_cli_relinked: lib-gate passes the post-relink state') or diag $gout;
+  like($gout, qr/lib-gate windows: \d+ object\(s\) checked, ok/, 'windlls_cli_relinked: lib-gate says ok');
+  ($grc, $gout) = gate($ssl, 'windows', $bin, SystemRoot => "$d/win");
+  is($grc, 1, 'windlls_cli_relinked: the same binary without the shlib DLLs fails the gate') or diag $gout;
+
+  ($rc, $out, $err) = run_script_env(\%env, 'win-dlls.pl', $ssl);
+  isnt($rc, 0, 'windlls_cli_usage: no directory -> non-zero exit');
+  like($err, qr/usage: win-dlls\.pl/, 'windlls_cli_usage: usage on STDERR');
+
+  my $empty = fake_tools("$d/nobin");
+  ($rc, $out, $err) = run_script_env({ %env, PATH => $empty }, 'win-dlls.pl', $ssl, "$d/d1");
+  is($rc, 2, 'windlls_cli_no_objdump: exit 2');
+  like($err, qr/\bobjdump\b/, 'windlls_cli_no_objdump: STDERR names objdump');
+}
+
+{ # lib-gate.pl: the cache listing is printed to STDOUT before the perl-library die
+  my $d = tempdir(CLEANUP => 1);
+  my $bin = win_fixture($d);
+  my $noperl = fake_binary("$d/noperl", ':', 'lib/auto/Clean/Clean.xs.dll' => 'x');
+  my ($rc, $out, $err) = run_script_env({ PATH => $bin, SystemRoot => "$d/win" }, 'lib-gate.pl', $noperl, 'windows');
+  isnt($rc, 0, 'libgate_no_perl_lib: a start that extracts no perl library fails');
+  like($out, qr/\APAR cache after the start: 0 object\(s\)\n/, 'libgate_no_perl_lib: the cache listing is on STDOUT first');
+  like($err, qr/extracted no perl library/, 'libgate_no_perl_lib: and the die names why');
+}
 
 done_testing;
