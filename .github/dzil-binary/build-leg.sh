@@ -5,7 +5,9 @@
 #   build-leg.sh keys     after the packing perl               -> lib_key
 #   build-leg.sh prepare  the dist's prepare, with the local lib active
 #   build-leg.sh deps     cpanm --installdeps . and PAR::Packer into the local lib
-#   build-leg.sh pack     per binary: pp, lib-gate.pl, require-gate.pl -> out/, artifact
+#   build-leg.sh pack     per binary: pp (Windows: again with the packing perl's
+#                         DLLs it links, win-dlls.pl), lib-gate.pl, require-gate.pl
+#                         -> out/, artifact
 #   build-leg.sh verify   per binary: the dist's verify
 # Run from the job's workspace. Environment: PLATFORM, VERSION (the version slot
 # of the asset names), PREPARE_KEY, LEG_IMAGE (part of perl_key),
@@ -181,8 +183,30 @@ pp_script() {
   ' "$LOCAL/bin"
 }
 
+# pp_run PP OUT ARG...: perl PP ARG... from the dist root, echoed first; fails
+# when it wrote no OUT.
+pp_run() {
+  local pp=$1 out=$2
+  shift 2
+  echo "+ perl $pp $*"
+  ( cd "$DIST" && PAR_VERBATIM=1 perl "$pp" "$@" )
+  [ -f "$out" ] || die "pp wrote no $out"
+}
+
+# win_dlls BINARY: into LINES, the DLLs BINARY links that neither the system nor
+# the binary provides, taken from the packing perl's own directories only -
+# Strawberry's perl\bin, then c\bin (OpenSSL & co.), siblings under its root;
+# never System32, Git's mingw64 or PATH.
+win_dlls() {
+  local perl_bin list
+  perl_bin=$(native "${DZIL_BINARY_PERL_BIN:?DZIL_BINARY_PERL_BIN is not set}")
+  list=$(perl "$HERE/win-dlls.pl" "$1" "$perl_bin" "$(dirname "$(dirname "$perl_bin")")/c/bin") ||
+    die "cannot list the DLLs $1 links"
+  lines "$list"
+}
+
 pack() {
-  local name out a args list dist pp
+  local name out a args list dist pp links
   leg_env lib
   pp=$(pp_script) || die "the packing perl has no pp in: $pp"
   names
@@ -192,9 +216,19 @@ pack() {
     args=()
     while IFS= read -r -d '' a; do args+=("$a"); done <"$TOP/pp-args.bin"
     rm -f "$TOP/pp-args.bin"
-    echo "+ perl $pp ${args[*]}"
-    ( cd "$DIST" && PAR_VERBATIM=1 perl "$pp" "${args[@]}" )
-    [ -f "$out" ] || die "pp wrote no $out"
+    pp_run "$pp" "$out" "${args[@]}"
+    # Windows: XS of Strawberry's (Net::SSLeay, ...) links DLLs of Strawberry's
+    # c\bin; pack them, or the binary needs Strawberry on the user's machine.
+    if [ "$os" = windows ]; then
+      win_dlls "$out"
+      if [ ${#LINES[@]} -gt 0 ]; then
+        echo "+ windows: linking ${#LINES[@]} DLL(s) from the packing perl: ${LINES[*]}"
+        links=()
+        for a in "${LINES[@]}"; do links+=(-l "$a"); done
+        rm -f "$out"
+        pp_run "$pp" "$out" "${links[@]}" "${args[@]}"
+      fi
+    fi
     perl "$HERE/lib-gate.pl" "$out" "$os"
     list=$(meta require "$name")
     lines "$list"

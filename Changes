@@ -32,7 +32,8 @@
     "binary" keys are unchanged.
 
   - Build-leg helper scripts for the shared binary release workflow live in
-    .github/dzil-binary (plan.pl, pp-args.pl, require-gate.pl, lib-gate.pl).
+    .github/dzil-binary (plan.pl, pp-args.pl, require-gate.pl, lib-gate.pl,
+    win-dlls.pl).
     They plan the platform legs, assemble the pp command line, gate the
     packed binary on its declared requirements and fail it when it links a
     shared library other than the system ones or needs a glibc newer than
@@ -41,7 +42,10 @@
     object that first start extracts (libperl, the inner executable, PAR's
     own XS) like the packed ones, and fails when no perl library was
     extracted, and a tool it runs (ldd, objdump, otool) that is killed by
-    a signal now fails the gate. No effect on dists without "binary" keys.
+    a signal now fails the gate. On Windows the pack step also links (pp -l)
+    the DLLs from the packing perl's own perl\bin and c\bin that the packed
+    XS needs and the gate would otherwise reject as foreign, such as
+    Strawberry's OpenSSL. No effect on dists without "binary" keys.
 
   - The shared binary release workflow gets its publish-job helper
     .github/dzil-binary/publish.pl (render, expected, sums, check) and the

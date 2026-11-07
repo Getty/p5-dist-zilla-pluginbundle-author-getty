@@ -34,20 +34,37 @@ sub glob_re {
   return qr/\A$re\z/i;
 }
 
+# A predicate: true for a library name the allowlist or a packed name covers.
+sub covered {
+  my ($allowed, $packed) = @_;
+  my @re = map { glob_re($_) } @$allowed;
+  my %packed = map { lc($_) => 1 } @$packed;
+  return sub {
+    my ($lib) = @_;
+    my ($base) = $lib =~ m{([^/\\]+)\z};
+    return $packed{lc $lib} || (defined $base && $packed{lc $base}) || scalar grep { $lib =~ $_ } @re;
+  };
+}
+
 # %links: object => [library names]; returns sorted "lib (linked by object)" strings.
 sub violations {
   my ($links, $allowed, $packed) = @_;
-  my @re = map { glob_re($_) } @$allowed;
-  my %packed = map { lc($_) => 1 } @$packed;
+  my $covered = covered($allowed, $packed);
   my @v;
   for my $obj (keys %$links) {
     for my $lib (@{ $links->{$obj} }) {
-      my ($base) = $lib =~ m{([^/\\]+)\z};
-      next if $packed{lc $lib} || (defined $base && $packed{lc $base}) || grep { $lib =~ $_ } @re;
-      push @v, "$lib (linked by $obj)";
+      push @v, "$lib (linked by $obj)" unless $covered->($lib);
     }
   }
   return sort @v;
+}
+
+# The distinct library names violations() flags, sorted.
+sub foreign {
+  my ($links, $allowed, $packed) = @_;
+  my $covered = covered($allowed, $packed);
+  my %f = map { $_ => 1 } grep { !$covered->($_) } map { @$_ } values %$links;
+  return sort keys %f;
 }
 
 sub glibc_cmp {
@@ -258,10 +275,14 @@ sub glibc_versions {
   return keys %v;
 }
 
-sub run {
-  my ($archive, $platform) = @_;
+# What the gate judges, without the verdict: the links of the loader, of every
+# object inside $archive and of every native file its first start extracts into
+# the PAR cache, and the names of all of those (packed). $report gets the cache
+# listing before the perl library check. Returns
+# { links => { label => [names] }, packed => [names], glibc => { version => 1 }, checked => count }.
+sub inspect_binary {
+  my ($archive, $platform, $report) = @_;
   die "unknown platform '$platform' (linux, macos, windows)\n" unless $SYSTEM{$platform};
-  local $| = 1;   # nothing buffered on STDOUT when run_tool / the start fork
   my $tmp = File::Temp->newdir;
   unpack_archive($archive, "$tmp");
 
@@ -288,7 +309,7 @@ sub run {
   my $cache = File::Temp->newdir;
   start_binary($archive, "$cache");
   my @cached = cache_objects("$cache");
-  print "PAR cache after the start: " . scalar(@cached) . " object(s)\n", map({ "  $_->[1]\n" } @cached);
+  $report->("PAR cache after the start: " . scalar(@cached) . " object(s)\n", map({ "  $_->[1]\n" } @cached));
   my $perl_re = glob_re($PERL_LIB{$platform});
   die "the start extracted no perl library into PAR_GLOBAL_TEMP: the gate proved nothing about libperl\n"
     unless grep { File::Basename::basename($_->[0]) =~ $perl_re } @cached;
@@ -296,16 +317,31 @@ sub run {
     $inspect->(@$c);
     push @packed, $packed_name->($c->[0]);
   }
+  return { links => \%links, packed => \@packed, glibc => \%glibc, checked => @objects + @cached };
+}
 
+# The system libraries $platform's objects may link; on Windows also every name
+# in %$links that System32 holds.
+sub allowlist {
+  my ($platform, $links) = @_;
   my @allowed = @{ $SYSTEM{$platform} };
   if ($platform eq 'windows') {
     my $sys = File::Spec->catdir($ENV{SystemRoot} // 'C:\\Windows', 'System32');
-    my %names = map { $_ => 1 } map { @$_ } values %links;
+    my %names = map { $_ => 1 } map { @$_ } values %$links;
     push @allowed, map { quotemeta } grep { -e File::Spec->catfile($sys, $_) } sort keys %names;
     @allowed = map { s/\\//gr } @allowed;   # names have no '*', plain strings
   }
+  return @allowed;
+}
 
-  my @v = violations(\%links, \@allowed, \@packed);
+sub run {
+  my ($archive, $platform) = @_;
+  local $| = 1;   # nothing buffered on STDOUT when run_tool / the start fork
+  my $seen = inspect_binary($archive, $platform, sub { print @_ });
+  my %links = %{ $seen->{links} };
+  my %glibc = %{ $seen->{glibc} };
+
+  my @v = violations(\%links, [allowlist($platform, \%links)], $seen->{packed});
   my $fail = 0;
   if (@v) { print STDERR "foreign shared libraries:\n", map({ "  $_\n" } @v); $fail = 1 }
   if ($platform eq 'linux' && !%glibc) {
@@ -318,7 +354,7 @@ sub run {
     }
     else { print "highest glibc symbol version: $max (floor $GLIBC_FLOOR)\n" }
   }
-  print "lib-gate $platform: " . (@objects + @cached) . " object(s) checked, " . ($fail ? 'FAILED' : 'ok') . "\n";
+  print "lib-gate $platform: $seen->{checked} object(s) checked, " . ($fail ? 'FAILED' : 'ok') . "\n";
   return $fail;
 }
 
