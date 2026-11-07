@@ -93,6 +93,7 @@ sub is_native {
 # Runs a tool; dies when it cannot be spawned (naming it). Returns (output, exit code).
 sub run_tool {
   my ($merge_stderr, @cmd) = @_;
+  return run_tool_win32($merge_stderr, @cmd) if $^O eq 'MSWin32';
   pipe(my $r, my $w) or die "pipe: $!\n";
   pipe(my $er, my $ew) or die "pipe: $!\n";   # exec-failure channel, closed on exec
   my $pid = fork // die "fork: $!\n";
@@ -111,6 +112,23 @@ sub run_tool {
   close $r; close $er;
   waitpid $pid, 0;
   die "cannot run $cmd[0]: $failed\n" if defined $failed && length $failed;
+  die "$cmd[0] was killed by signal " . ($? & 127) . "\n" if $? & 127;
+  return ($out // '', $? >> 8);
+}
+
+# Win32: fork is emulated there and pipe handles are not duplicated reliably
+# into the pseudo-process (perlfork, BUGS), so the pipe + fork + exec above never
+# sees EOF. A list-form pipe open spawns the tool directly. STDOUT only: the
+# tool's STDERR stays the gate's, and merge_stderr (only ldd, Linux) dies.
+# Win32 keeps only the low byte of an exit code and has no signals: a killed or
+# crashed tool shows as that byte, the signal check never fires there.
+sub run_tool_win32 {
+  my ($merge_stderr, @cmd) = @_;
+  die "cannot run $cmd[0]: merging its STDERR is not supported on MSWin32\n" if $merge_stderr;
+  open my $fh, '-|', @cmd or die "cannot run $cmd[0]: $!\n";
+  my $out = do { local $/; <$fh> };
+  close $fh;   # false on a non-zero exit; $? holds the status either way
+  die "cannot wait for $cmd[0]: $!\n" if $? == -1;
   die "$cmd[0] was killed by signal " . ($? & 127) . "\n" if $? & 127;
   return ($out // '', $? >> 8);
 }
