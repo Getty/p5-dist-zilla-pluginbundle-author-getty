@@ -101,11 +101,16 @@ meta() {
 PERL
 }
 
-# lines LIST: the non-empty lines of LIST into LINES (bash 3.2 has no mapfile)
+# lines LIST: the non-empty lines of LIST into LINES (bash 3.2 has no mapfile). Split on \n
+# only and strip one trailing \r per line (Strawberry perl prints CRLF; command substitution
+# strips only the last line's CR), the rule pp-args.pl's pp_args_lines states.
 lines() {
   local l
   LINES=()
-  while IFS= read -r l; do if [ -n "$l" ]; then LINES+=("$l"); fi; done <<<"$1"
+  while IFS= read -r l; do
+    l=${l%$'\r'}
+    if [ -n "$l" ]; then LINES+=("$l"); fi
+  done <<<"$1"
 }
 
 names() {
