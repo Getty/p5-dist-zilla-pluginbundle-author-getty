@@ -832,4 +832,80 @@ sub dead {
   is(scalar(() = $err =~ /cannot exec sh/g), 1, 'pp_args_child_exec_fails: the child message appears exactly once');
 }
 
+# --- run_tool on Win32: list-form pipe open, no fork -------------------------
+# Real Win32 cannot run here; `local $^O` sends run_tool down run_tool_win32 on Linux.
+
+{
+  my @seen;
+  my @r = do {
+    no warnings 'redefine';
+    local *DzilBinary::LibGate::run_tool_win32 = sub { @seen = @_; return ('stub', 42) };
+    local $^O = 'MSWin32';
+    eval { DzilBinary::LibGate::run_tool(0, 'some-tool', 'a1') };
+  };
+  is_deeply(\@seen, [0, 'some-tool', 'a1'], 'run_tool_win32_dispatch: MSWin32 hands (merge_stderr, @cmd) to run_tool_win32');
+  is_deeply(\@r, ['stub', 42], 'run_tool_win32_dispatch: run_tool returns what run_tool_win32 returned');
+
+  @seen = ();
+  {
+    no warnings 'redefine';
+    local *DzilBinary::LibGate::run_tool_win32 = sub { @seen = @_; return ('', 0) };
+    DzilBinary::LibGate::run_tool(0, 'true');
+  }
+  is_deeply(\@seen, [], 'run_tool_win32_dispatch: on this platform the Unix path runs, not run_tool_win32');
+
+  my $dies = eval { local $^O = 'MSWin32'; DzilBinary::LibGate::run_tool(1, 'true'); 1 };
+  ok(!$dies, 'run_tool_win32_dispatch: merge_stderr under MSWin32 dies (reaches the Win32 branch)');
+  my @u = DzilBinary::LibGate::run_tool(1, 'true');
+  is($u[1], 0, 'run_tool_win32_dispatch: ... while the Unix path accepts merge_stderr');
+}
+
+{
+  local $^O = 'MSWin32';
+
+  my @r = DzilBinary::LibGate::run_tool(0, 'echo', 'hello', 'world');
+  is_deeply(\@r, ["hello world\n", 0], 'run_tool_win32_output: (STDOUT as one string, exit 0)');
+
+  @r = DzilBinary::LibGate::run_tool(0, 'false');
+  is_deeply(\@r, ['', 1], 'run_tool_win32_empty: no output is the defined empty string, exit 1 is returned not died');
+
+  @r = DzilBinary::LibGate::run_tool(0, '/bin/sh', '-c', 'exit 3');
+  is($r[1], 3, 'run_tool_win32_exit_code: a plain exit 3 is returned as 3');
+
+  @r = DzilBinary::LibGate::run_tool(0, '/bin/sh', '-c', 'printf "l1\nl2\nl3\n"');
+  is($r[0], "l1\nl2\nl3\n", 'run_tool_win32_multiline: the whole output is slurped');
+
+  # STDERR must not be captured; keep the child's STDERR off the test output
+  open my $olderr, '>&', \*STDERR or die "dup: $!";
+  open STDERR, '>', File::Spec->devnull or die "null: $!";
+  @r = DzilBinary::LibGate::run_tool(0, '/bin/sh', '-c', 'echo out; echo err >&2');
+  open STDERR, '>&', $olderr or die "restore: $!";
+  is_deeply(\@r, ["out\n", 0], 'run_tool_win32_stdout_only: the tool\'s STDERR is not in the output');
+
+  my $warn = '';
+  my $res = eval {
+    local $SIG{__WARN__} = sub { $warn .= $_[0] };
+    DzilBinary::LibGate::run_tool(0, 'no-such-tool-xyz-wingate');
+    1;
+  };
+  my $err = $@;
+  ok(!$res, 'run_tool_win32_missing: a tool that cannot be started dies');
+  like($err, qr/\Acannot run no-such-tool-xyz-wingate: \S/, 'run_tool_win32_missing: the message names the tool and the reason');
+
+  $err = '';
+  eval { DzilBinary::LibGate::run_tool(1, 'echo', 'x'); 1 } or $err = $@;
+  is($err, "cannot run echo: merging its STDERR is not supported on MSWin32\n",
+    'run_tool_win32_merge_stderr: dies with the exact message');
+
+  $err = '';
+  eval { DzilBinary::LibGate::run_tool(1, 'no-such-tool-xyz-wingate'); 1 } or $err = $@;
+  is($err, "cannot run no-such-tool-xyz-wingate: merging its STDERR is not supported on MSWin32\n",
+    'run_tool_win32_merge_stderr: dies before anything is started (not even a missing tool is reached)');
+
+  $err = '';
+  eval { DzilBinary::LibGate::run_tool(0, '/bin/sh', '-c', 'kill -TERM $$'); 1 } or $err = $@;
+  is($err, "/bin/sh was killed by signal 15\n", 'run_tool_win32_signal: a signalled tool dies naming the signal');
+}
+# untested: run_tool_win32 "cannot wait for <cmd>" ($? == -1 after close) -- not reachable from a test.
+
 done_testing;
