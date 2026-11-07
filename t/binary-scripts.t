@@ -728,9 +728,25 @@ echo $! > "$REC/child"
 wait
 SH
 
+# A killed process whose parent never reaps it (PID 1 of a CI container is `tail -f`)
+# stays a zombie: kill 0 still reaches it, but it is dead.
+sub zombie {
+  my ($pid) = @_;
+  if (open my $fh, '<', "/proc/$pid/stat") {
+    my $stat = do { local $/; <$fh> };
+    return $stat =~ /\)\s+(\S)/ && $1 eq 'Z' ? 1 : 0;
+  }
+  my $st = `ps -o stat= -p $pid 2>/dev/null`;
+  return defined $st && $st =~ /^\s*Z/ ? 1 : 0;
+}
+
 sub dead {
   my ($pid) = @_;
-  for (1 .. 20) { return 1 unless kill 0, $pid; select undef, undef, undef, 0.1 }
+  for (1 .. 20) {
+    return 1 unless kill 0, $pid;
+    return 1 if zombie($pid);
+    select undef, undef, undef, 0.1;
+  }
   return 0;
 }
 
