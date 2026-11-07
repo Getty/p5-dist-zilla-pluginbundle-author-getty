@@ -1,0 +1,31 @@
+---
+claimed_at: 2026-11-07T00:15:24Z
+claimed_by: p5-dist-zilla-pluginbundle-author-getty
+class: standard
+created: 2026-11-03T20:33:25Z
+id: 20
+priority: medium
+started: 2026-11-06T20:24:57Z
+status: in-progress
+tags:
+- binary
+- dzil-binary
+- release
+title: 'Binary release form: binary = <name>, x_binaries, dzil-binary.yml, install
+  scripts'
+updated: 2026-11-07T00:15:24Z
+---
+
+Plan: ~/dev/p5-mcp-wiki/docs/superpowers/plans/2026-11-03-binary-bundle.md (Tasks 0-8). Spec: ~/dev/p5-mcp-wiki/docs/superpowers/specs/2026-11-03-binary-release-design.md (approved 2026-11-03, amended after approval: prior art, mcp-hub as second consumer).
+
+Covers k17 (Task 1), k18 (Tasks 2-6), k19 (Task 5, Task 7 Step 5). First consumer mcp-wiki (its plan 2026-11-03-binary-mcp-wiki.md), second mcp-hub. Task 7 (throwaway end-to-end) runs after mcp-wiki Tasks 1-5 and needs the maintainer's go for the throwaway repo and the branch push; the tag binary-v1 and the bundle CPAN release are the maintainer's go as well.
+
+2026-11-04 from p5-mcp-wiki Task 3: debian:*-slim images ship perl-base (Essential), so the Linux smoke's 'no perl on PATH' assertion fails there unless the workflow deletes the system perl in the throwaway container first (rm -f /usr/bin/perl /usr/bin/perl5*). Bundle plan Task 6 amended accordingly (uncommitted in p5-mcp-wiki docs/). Also verified: PAR_GLOBAL_TMPDIR moves the PAR cache only into an existing directory -- a missing one is silently ignored; PAR_GLOBAL_TEMP sets the exact cache dir. install.sh/k19 warm start and any docs that mention PAR_GLOBAL_TMPDIR must say 'existing directory'.
+
+From mcp-wiki Task 4 (binary-prepare.sh): bundle plan Task 6 does not say when the local-lib cache is saved. Save it only after lib-gate.pl and require-gate.pl pass (explicit actions/cache/save, or the post-job save that runs on success only) — a lib with an SSL-linked Git::Raw saved under the key would make every later run skip the build until prepare_key changes; lib-gate would fail each run but the cache stays poisoned.
+
+From mcp-wiki's final review of its binary Tasks 1-4: (1) the build leg needs git — mcp-wiki's verify checks the history with git log, almalinux:8 ships no git (nor perl/unzip); the plan's build-leg tool line now lists git for the dnf install. (2) prepare must see GITHUB_ACTIONS=true — a job container: passes it, a bare docker run needs -e; mcp-wiki's prepare refuses otherwise. (3) the local check on dzil build never runs prepare. Optional: RUNNER_ENVIRONMENT=github-hosted as a tighter prepare gate, if it reaches job containers. Plan: p5-mcp-wiki docs/superpowers/plans/2026-11-03-binary-bundle.md Global Constraints.
+
+2026-11-06 session binary-form: executing Tasks 0–6 on local branch binary-form (from main 6bc9c40), SDD ledger in .superpowers/sdd/2026-11-03-binary-bundle/progress.md. Stop before Task 7 (maintainer's go). Pre-flight plan defect sent to p5-mcp-wiki-99: the probe run's dzil build would use the released bundle (0.327), which writes no x_binaries — ruling: the probe builds with the bundle at bundle_ref. Further rulings: before_release accepts dzil-binary.yml@<any ref> (Task 7 uses @binary-form); probe artifacts <name>-probe-<sha7>-<platform>; local-lib cache saved only after lib-gate + require-gate.
+
+2026-11-07 session binary-form: Tasks 0–6 done on local branch binary-form, commits 6bc9c40..d9ec127 (NOT pushed; no tag, no release). Every task review clean; final whole-branch review (opus) 'With fixes' — 3 Important fixed in one wave (d9ec127): Archive::Zip declared on test; lib-gate starts each binary once (--help, stdin EOF, fresh PAR_GLOBAL_TEMP, 60 s) and checks every native object the start extracts (libperl, inner par exe, PAR XS), fails without a perl lib in the cache — on a real PAR binary it now reports libcrypt.so.1 via cache/libperl.so.5.40 that the old gate missed; publish marks latest only if none / same id / latest.created_at <= this (no rollback), empty expected list fails; .gitattributes .github/dzil-binary/** eol=lf. Scoped re-review: all addressed. prove -lr t/ 32 files / 615 PASS on d9ec127; actionlint 1.7.7 + shellcheck 0.10.0 clean. Rulings R0–R18 + task rulings + Task 7 watch list in .superpowers/sdd/2026-11-03-binary-bundle/progress.md. Next: Task 7 needs the maintainer's go (push binary-form, throwaway repo, probe dispatch); then tag binary-v1 and Task 8.
