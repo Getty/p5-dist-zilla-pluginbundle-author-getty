@@ -1,0 +1,49 @@
+---
+claimed_at: 2026-11-07T00:15:33Z
+claimed_by: p5-dist-zilla-pluginbundle-author-getty
+class: standard
+completed: 2026-11-08T03:34:28Z
+created: 2026-11-03T18:40:11Z
+id: 18
+priority: medium
+started: 2026-11-06T20:35:32Z
+status: done
+tags:
+- binary
+- dzil-binary
+title: 'dzil-binary@v1: what mcp-hub needs as its second consumer'
+updated: 2026-11-08T03:34:28Z
+---
+
+p5-mcp-hub (k28) will set 'binary = mcp-hub' and consume dzil-binary@v1 as designed in ~/dev/p5-mcp-wiki/docs/superpowers/specs/2026-11-03-binary-release-design.md (draft). Its per-dist part is done and verified locally, incl. a portable rehearsal with the spike's no-crypt perl on almalinux:8 (library gate passes, glibc floor 2.28, smoke without perl OK on rockylinux:9, almalinux:8, debian:bullseye-slim). Inputs mcp-hub needs:
+(a) -M set: ~30 modules are invisible to pp's scanner (MCP::Hub::Command::*, MCP::Hub::Native::*, Mojolicious::Command::*/Plugin::*, Mojo::Server::*, YAML::PP::Schema::Core). Take it from a dist command ('perl -Ilib scripts/loaded-modules.pl'), not a static dist.ini list.
+(b) -X set with namespace expansion (a 'Name::' entry -> one -X per module below it found in @INC), from 'scripts/loaded-modules.pl --left-out'. mcp-hub forbids EV, IO::Socket::SSL, Net::SSLeay in the binary.
+(c) -a for Mojolicious/resources from the installed Mojolicious.
+(d) PAR_VERBATIM=1 (pp's POD filter corrupts [@Author::GETTY] files with =attr/=method between code).
+(e) A build-leg hook for scripts/verify-binary.sh (needs perl and unzip).
+(f) Smoke: scripts/smoke-binary.sh from the unpacked tarball root (bash with /dev/tcp, sh, coreutils, grep, sed, a free 127.0.0.1 port; no perl).
+(g) Required modules: YAML::PP CryptX MCP::Hub::Native::* MCP::Hub::Command::* MCP::Hub::Upstream::*.
+(h) Legs: linux-x86_64, linux-aarch64 or -arm64 (naming open, see below), macos-arm64. No Windows: mcp-hub's stdio/Docker upstreams need fork + AF_UNIX socketpair under Mojo::IOLoop.
+Open: asset name linux-aarch64 (mcp-hub's agent) vs linux-arm64 (the design) — the maintainer picks one for all dists.
+
+Maintainer decisions 2026-11-03: (1) ARM Linux asset name is linux-arm64 for all dists (install.sh maps uname -m aarch64 -> arm64). Drift to clean up: locale-simple's released assets and the shared skill perl-par-binary-release say linux-aarch64. (2) mcp-hub's binary gets TLS (p5-mcp-hub k36), so IO::Socket::SSL/Net::SSLeay move from 'forbidden' to 'required' for mcp-hub, and the action needs a way to link OpenSSL statically (macOS has no system OpenSSL; the dependency gate stays system-only). Concrete inputs follow when k36 reports.
+
+How the plan (~/dev/p5-mcp-wiki/docs/superpowers/plans/2026-11-03-binary-bundle.md) answers (a)-(h): (a)+(b)+(c) one key binary_pp_args = a command run from the tarball root after the deps install; every output line is one pp argument (-M, -X, -a). The -X namespace expansion and the Mojolicious resources path are computed by that command, not by the workflow -- mcp-hub moves the expansion from build-binary.sh into e.g. 'perl -Ilib scripts/loaded-modules.pl --pp-args'. (d) PAR_VERBATIM=1 on every pp call. (e) binary_verify, build leg, binary path appended. (f) binary_smoke on clean machines without perl, from the tarball root, binary path appended. (g) binary_require with Name::* globs, checked inside the archive. (h) binary_platforms. TLS: binary_prepare runs once per leg before the deps install, with the packing perl on PATH -- the expected hook for the static OpenSSL; k36's report confirms or replaces it. CI is a reusable workflow; the dist's binaries.yml is a short caller (verbatim in plan Task 6).
+
+Update from p5-mcp-hub k36 (TLS in the binary, done locally): (b) -X now: EV, Mojolicious extras, JSON.pm backends, LWP, URI, Net::IDN::Encode, Net::LibIDN (optional IO::Socket::SSL imports that would drag in libbrotli/libbz2/libidn); (f) smoke needs free ports port..port+3 and ships t/fixtures/binary/tls, no network; (g) required += IO::Socket::SSL Net::SSLeay Mozilla::CA; (h) legs: linux-x86_64, linux-arm64, macos-arm64. NEW (i) a per-dist prepare hook 'binary_prepare = scripts/build-binary-openssl.sh <prefix>': static OpenSSL 3.5.9 (no-shared no-module no-autoload-config, OPENSSLDIR=/etc/ssl) + Net::SSLeay/IO::Socket::SSL/Mozilla::CA into the packing perl. It must run once per leg with the packing perl and its cpanm first on PATH, BEFORE installdeps (or cpanm builds Net::SSLeay against the system libssl), needs curl, a C compiler and make, and wants a cacheable prefix (~6 min uncached). macOS: otool instead of ldd, MACOSX_DEPLOYMENT_TARGET must reach OpenSSL's compile via clang's env (unverified). Verified on almalinux:8 base: Net::SSLeay .so needs only libc, library gate OK, glibc floor 2.28, no-perl smoke incl. TLS OK on rockylinux:9, almalinux:8, debian:bullseye-slim.
+
+2026-11-04 How the plan answers the k36 update (plans in ~/dev/p5-mcp-wiki/docs/superpowers/plans/, not committed yet): (i) binary_prepare gets the absolute path of a per-leg cache directory appended as its last argument (workflow restores/saves it, key prepare-<platform>-<sha256 of the prepare file>), so mcp-hub writes 'binary_prepare = scripts/build-binary-openssl.sh' without PREFIX. It runs after the packing perl, before installdeps, with the packing perl's bin (incl. cpanm) first on PATH and the deps local lib already active (PERL5LIB/PERL_MM_OPT/PERL_MB_OPT/PERL_LOCAL_LIB_ROOT) -- Net::SSLeay/IO::Socket::SSL/Mozilla::CA land in that local lib, the packing perl's cache stays clean (saved right after build-perl.sh, never post-job). Every leg guarantees curl, a C compiler, make, tar, patch, unzip. MACOSX_DEPLOYMENT_TARGET=12.0 is exported for the whole leg. (b) longer -X list and (g) IO::Socket::SSL Net::SSLeay Mozilla::CA: no plan change, they go through binary_pp_args and binary_require. (f) ports port..port+3 and t/fixtures/binary/tls: no plan change (smoke runs from the unpacked tarball root; Linux smoke containers keep their own loopback). (h) binary_platforms = linux-x86_64 linux-arm64 macos-arm64. Not testable in bundle Task 7 (mcp-wiki is the test dist): the static OpenSSL on arm64/macOS meets reality in mcp-hub's own first probe run.
+
+RED t/binary-config.t written (not committed): fails for missing Binary plugin/subsection/keys; awaiting worker
+
+Task 2 GREEN: binary keys, Binary subsection + plugin, x_binaries; prove -lr t/ 292 ok, dzil build ok. Report in task-2-report.md
+
+Task 3 RED: t/binary-build.t written (test-writer); awaiting worker for after_build/before_release
+
+Task 3 implemented (Binary.pm after_build/before_release, action.yml DZIL_BINARY_SKIP). One test defect: t/binary-build.t #33 PATH lacks git
+
+Tasks 2–6 of the binary-bundle plan built on branch binary-form (b5babbf..399a69b): binary* keys + x_binaries (Task 2), local pp check / release gate (Task 3), leg helpers (Task 4), install scripts + publish.pl (Task 5), reusable dzil-binary.yml (Task 6). Per-task reviews clean. Unproven until Task 7's probe (maintainer's go) and mcp-hub's own probe — hence review, not done.
+
+2026-11-07: final-review fix wave committed as d9ec127 on binary-form (lib-gate checks the first-start PAR cache incl. libperl; publish never rolls releases/latest back; Archive::Zip test dep; .gitattributes LF). Stays in review until Task 7's probe proves the legs (R18).
+
+Proof: the plan's answers (a)-(i) are on main (b5babbf..236c798, Windows DLL linking dcb2e9e, deps 88a07c4) and ran end to end on mcp-wiki: probe 42426132483, release 42440318210, refused re-run 42440547183, install 42440563652. Not proven here: mcp-hub's static OpenSSL through binary_prepare on linux-arm64/macos-arm64 (mcp-hub's own first probe run) and the runtime load of the linked Windows TLS DLLs; binary_pp_args on Windows is k21 (mcp-hub has no Windows leg).
