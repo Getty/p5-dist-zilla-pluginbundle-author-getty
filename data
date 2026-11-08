@@ -1,0 +1,22 @@
+---
+class: standard
+completed: 2026-11-08T03:34:14Z
+created: 2026-11-03T18:40:16Z
+id: 19
+priority: high
+started: 2026-11-08T03:34:14Z
+status: done
+tags:
+- binary
+- dzil-binary
+- install
+title: PAR binaries crash on concurrent first starts with a cold cache; install.sh
+  must warm it
+updated: 2026-11-08T03:34:14Z
+---
+
+Found by p5-mcp-hub's binary worker (k28), reproduced with a dev-box and a portable no-crypt build: when several processes start before the first one has unpacked into $TMPDIR/par-<user>/cache-<sha1>, 1–2 of 3 die with a segfault or 'did not return a true value'. A warm cache is fine. Likely affects every PAR binary, mcp-wiki included (MCP clients often start several servers at once). The generic install.sh should run the installed binary once (e.g. --help) right after installing; install.ps1 likewise.
+
+Planned: install.sh/install.ps1 start every installed binary once (--help, stdin from the null device, output discarded, status ignored) -- plan Task 5, test warms_cache; three concurrent first starts after install are checked in Task 7 Step 5. Direct downloads stay exposed; the README says so (spec, Open risks).
+
+Proof: install test 42440563652 — after install.sh (ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel) and install.ps1 (windows-2022, pwsh 7 and Windows PowerShell 5.1) three concurrent first starts each exit like the reference start, no segfault, no 'did not return a true value'. Installers warm the PAR cache: 94ecda0, a0c642a; lib-gate checks the first-start cache: d9ec127; on main since 236c798. Direct downloads stay exposed (spec, open risks).
