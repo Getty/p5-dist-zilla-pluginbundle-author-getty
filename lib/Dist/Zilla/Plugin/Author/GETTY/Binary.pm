@@ -184,4 +184,53 @@ subsection. It writes the C<x_binaries> key of F<META.json>, which the binary
 release workflow reads. Fails the build when the binary's script is not part of
 the distribution.
 
+Right after C<dzil build> it packs the binary with C<pp> as a local check and
+runs its C<verify> and C<smoke> commands on it; that needs L<PAR::Packer> in
+the C<PATH>, or the environment variable C<DZIL_BINARY_SKIP> set to skip the
+check. Before a release it refuses to go on without a
+F<.github/workflows/binaries.yml> that calls the binary workflow of
+L<Dist::Zilla::PluginBundle::Author::GETTY>. See the C<Binaries> section there
+for the whole binary release.
+
+=head1 ATTRIBUTES
+
+=head2 binary_name
+
+Name of the binary, required: a letter or digit, then letters, digits, C<.>,
+C<_> or C<->. Also the name of the binary in F<META.json>.
+
+=head2 script
+
+Script packed into the binary, required, relative to the distribution root; it
+has to be part of the distribution.
+
+=head2 modules
+
+Modules packed in besides what C<pp> finds, each as C<-M>. Repeatable.
+
+=head2 require
+
+Modules that have to be inside the finished binary. Repeatable.
+
+=head2 pp_args
+
+Shell command whose output lines are added to the C<pp> command line.
+
+=head2 verify
+
+Shell command run with the packed binary as its argument.
+
+=head2 smoke
+
+Shell command the workflow runs with the binary on a machine without Perl.
+
+=head2 platforms
+
+Platforms to build, default all of C<linux-x86_64>, C<linux-arm64>,
+C<macos-arm64>, C<macos-x86_64> and C<windows-x86_64>. Dist-wide, repeatable.
+
+=head2 prepare
+
+Shell command run once per platform before the build. Dist-wide.
+
 =cut

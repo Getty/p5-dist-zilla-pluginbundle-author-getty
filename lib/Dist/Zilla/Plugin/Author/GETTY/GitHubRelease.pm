@@ -15,7 +15,18 @@ release as a draft, uploads the CPAN tarball to it and only then publishes it.
 A failed upload dies loudly and leaves the draft in place for inspection,
 instead of publishing a release that lacks its tarball. The release is
 published with C<make_latest> true, or false when the distribution declares
-binaries (a L<Dist::Zilla::Plugin::Author::GETTY::Binary> plugin is present).
+binaries (a L<Dist::Zilla::Plugin::Author::GETTY::Binary> plugin is present):
+the binary workflow marks it afterwards, see the C<Binaries> section of
+L<Dist::Zilla::PluginBundle::Author::GETTY>. Added by that bundle in place of
+L<Dist::Zilla::Plugin::GitHub::CreateRelease> unless C<no_github> or
+C<no_github_release> is set.
+
+=head1 ATTRIBUTES
+
+=head2 make_latest
+
+Whether the published release is marked as the latest one. Default: true, false
+when the distribution declares binaries.
 
 =cut
 

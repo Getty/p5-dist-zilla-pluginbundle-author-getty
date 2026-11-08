@@ -29,6 +29,9 @@ requires 'Pod::Elemental::Transformer::List', '0.102001';
 requires 'Pod::Weaver', '4.022';
 requires 'Pod::Weaver::Section::Support', '1.014';
 
+# Only the local pp check of a binary dist (see the Binaries section); DZIL_BINARY_SKIP=1 skips it.
+recommends 'PAR::Packer';
+
 on test => sub {
   requires 'Archive::Zip';
   requires 'Test::More', '1.302226';

@@ -83,6 +83,7 @@ occurrence. C<modules>, C<require>, C<pp_args>, C<verify> and C<smoke> are
 inherited from the parent's C<binary_*> keys unless set here; C<script>
 defaults to F<bin/NAME>. C<platforms> and C<prepare> are dist-wide: set
 C<binary_platforms> and C<binary_prepare> in the parent; a subsection that sets
-them is refused.
+them is refused. The key reference and the release workflow are in the
+C<Binaries> section of L<Dist::Zilla::PluginBundle::Author::GETTY>.
 
 =cut

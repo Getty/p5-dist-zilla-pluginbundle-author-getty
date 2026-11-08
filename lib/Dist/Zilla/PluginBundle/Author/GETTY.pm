@@ -1079,6 +1079,142 @@ C<docker_image> is set — use this when you configure your Docker builds
 exclusively through explicit C<[@Author::GETTY::Docker / name]> subsections
 and don't want an extra plugin added behind your back.
 
+=head2 Binaries
+
+A distribution can ship standalone binaries of its scripts, packed with
+L<PAR::Packer> (C<pp>), as assets of its GitHub release. Declare them with
+C<binary>; the bundle adds one L<Dist::Zilla::Plugin::Author::GETTY::Binary>
+per binary, which writes them to the C<x_binaries> key of F<META.json>. A
+reusable GitHub Actions workflow of this repository reads that key, packs the
+binaries on the five platforms, checks them and attaches them to the release.
+
+  [@Author::GETTY]
+  binary           = foo bar
+  binary_modules   = Some::Module Other::*
+  binary_require   = Some::Module
+  binary_platforms = linux-x86_64 linux-arm64
+  binary_pp_args   = sh share/pp-args.sh
+  binary_verify    = sh share/verify.sh
+  binary_smoke     = sh share/smoke.sh
+  binary_prepare   = sh share/prepare.sh
+
+Only C<binary> is needed; every other key is optional. A binary C<foo> is packed
+from F<bin/foo> (a different script needs an explicit
+C<[@Author::GETTY::Binary / foo]> subsection with C<script>, see
+L<Dist::Zilla::PluginBundle::Author::GETTY::Binary>).
+
+The distribution calls the workflow from its own
+F<.github/workflows/binaries.yml>, which has to exist before C<dzil release>
+(the release is refused without it):
+
+  name: binaries
+  on:
+    release:
+      types: [published]
+    workflow_dispatch:
+      inputs:
+        tag:
+          description: Release tag to build and attach; empty = probe run
+          required: false
+  jobs:
+    binaries:
+      permissions:
+        contents: write
+      uses: Getty/p5-dist-zilla-pluginbundle-author-getty/.github/workflows/dzil-binary.yml@binary-v1
+      with:
+        tag: ${{ github.event.release.tag_name || inputs.tag }}
+
+A published release builds from the release's CPAN tarball and attaches, per
+binary and platform, C<NAME-VERSION-PLATFORM> (C<.exe> on Windows), plus
+F<SHA256SUMS>, F<install.sh> and F<install.ps1>. Started by hand with an empty
+C<tag>, the workflow is a probe run: it builds the checked-out commit and keeps
+the result as workflow artifacts, touching no release.
+
+Binaries are assets of the GitHub release, so C<binary> forces it: the bundle
+dies when C<no_github> or C<no_github_release> is set, or when no GitHub remote
+was found. The release of a distribution with binaries is not marked as the
+latest release by the release plugin
+(L<Dist::Zilla::Plugin::Author::GETTY::GitHubRelease>); the workflow marks it
+after it attached the binaries, when its version is newer than the current
+latest release.
+
+The installers are rendered per release. With the distribution name upper-cased
+and C<-> turned into C<_> as prefix (C<MCP_WIKI_> for C<MCP-Wiki>), they read
+C<PREFIX_VERSION> (install that version instead), C<PREFIX_INSTALL_DIR>
+(default F<~/.local/bin>, or F<%LOCALAPPDATA%\Programs\DIST> on Windows),
+C<PREFIX_PLATFORM> (override the detected platform) and C<PREFIX_BASE_URL> (the
+releases URL, default the GitHub releases of the repository):
+
+  curl -fsSL https://github.com/OWNER/REPO/releases/latest/download/install.sh | sh -s -- foo
+
+Without names they install every binary of the release. The binaries are built
+for C<linux-x86_64>, C<linux-arm64>, C<macos-arm64>, C<macos-x86_64> and
+C<windows-x86_64>. The Linux binaries must not need a glibc newer than 2.28,
+which the build checks (C<$GLIBC_FLOOR> in F<.github/dzil-binary/lib-gate.pl>).
+
+Packing runs again at C<dzil build> as a local check, which needs C<pp> in the
+C<PATH> (L<PAR::Packer>) and fails the build without it. Set the environment
+variable C<DZIL_BINARY_SKIP> to a true value to skip that local check,
+including C<binary_verify> and C<binary_smoke>.
+
+=head2 binary
+
+Whitespace-separated names of the binaries; may be repeated. Each name becomes
+a binary packed from F<bin/NAME>. Setting it turns the binary release on.
+
+=head2 binary_default
+
+Defaults to true. Set to C<0> to not add the binaries from C<binary> and
+configure them through explicit C<[@Author::GETTY::Binary / name]> subsections
+instead, as with C<docker_default>.
+
+=head2 binary_modules
+
+Whitespace-separated modules packed into every binary besides what C<pp>
+finds itself, each passed as C<-M>. A trailing C<::*> takes the whole
+namespace. Default: none. Inherited by subsections.
+
+=head2 binary_require
+
+Whitespace-separated modules (or C<Namespace::*> globs) that have to be inside
+every finished binary; the build fails when one is missing. Default: none.
+Inherited by subsections.
+
+=head2 binary_platforms
+
+Whitespace-separated platforms to build, out of C<linux-x86_64>,
+C<linux-arm64>, C<macos-arm64>, C<macos-x86_64> and C<windows-x86_64>. Default:
+all five. Dist-wide: a subsection that sets C<platforms> is refused.
+
+=head2 binary_pp_args
+
+A shell command run in the distribution root whose output is added to the
+C<pp> command line, one argument per line (empty lines dropped, a trailing
+carriage return removed, no word splitting). Default: none. Inherited by
+subsections.
+
+=head2 binary_verify
+
+A shell command run in the distribution root after packing, with the path of
+the binary appended as its argument. A failing exit status fails the build.
+Default: none, the workflow then notes that no verify is declared. Inherited by
+subsections.
+
+=head2 binary_smoke
+
+A shell command like C<binary_verify>, which the workflow runs on every
+platform on a clean machine without Perl (Linux inside the images AlmaLinux 8
+and 9 and Debian bookworm slim, macOS and Windows on the runner as it is),
+with the binary as its argument. Default: none, the binary is then not
+smoke tested. Inherited by subsections.
+
+=head2 binary_prepare
+
+A shell command run once per platform before the dependencies are installed,
+for building what the binaries need (a system library, say). Its first word
+has to be a file of the distribution; the file's checksum keys the cache of its
+result. Default: none. Dist-wide: a subsection that sets C<prepare> is refused.
+
 =cut
 
 my @gather_array_options = qw( exclude_filename exclude_match );
