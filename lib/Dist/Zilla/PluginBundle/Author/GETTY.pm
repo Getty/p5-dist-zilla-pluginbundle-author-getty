@@ -121,7 +121,7 @@ In default configuration it is equivalent to:
   [Git::Push]
   push_to = origin
 
-  [GitHub::CreateRelease]   ; with a GitHub remote
+  [Author::GETTY::GitHubRelease]   ; with a GitHub remote
   branch     = main
   notes_from = ChangeLog
   ; notes_file defaults to "Changes" when notes_from = ChangeLog
@@ -248,7 +248,7 @@ L<Dist::Zilla::Plugin::PodWeaver>.
 
 If set to 1, this attribute will disable L<Dist::Zilla::Plugin::GithubMeta> and
 will add L<Dist::Zilla::Plugin::Repository> instead. It also disables
-L<Dist::Zilla::Plugin::GitHub::CreateRelease>.
+L<Dist::Zilla::Plugin::Author::GETTY::GitHubRelease>.
 
 When unset, the bundle auto-detects whether the repository has a remote
 pointing at C<github.com> (by scanning F<.git/config>). If no GitHub remote is
@@ -277,7 +277,7 @@ hosts. Has no effect when a GitHub remote is present (GitHub wins).
 
 =head2 no_github_release
 
-If set to 1, L<Dist::Zilla::Plugin::GitHub::CreateRelease> will not be used
+If set to 1, L<Dist::Zilla::Plugin::Author::GETTY::GitHubRelease> will not be used
 even though GitHub integration is otherwise active. Like L</no_github>, this
 defaults to 1 when no GitHub remote is detected in the repository's remotes.
 
@@ -649,6 +649,8 @@ L<Dist::Zilla::PluginBundle::Git::VersionManager>
 L<Dist::Zilla::Plugin::Git::CheckFor::CorrectBranch>
 
 L<Dist::Zilla::Plugin::GitHub::CreateRelease>
+
+L<Dist::Zilla::Plugin::Author::GETTY::GitHubRelease>
 
 L<Dist::Zilla::Plugin::GithubMeta>
 
@@ -1573,7 +1575,7 @@ sub configure {
   # uses @Git: it stamps Changes here, with the same format and time zone as
   # @Git::VersionManager (changes_version_columns 10). It has to come before
   # @Git, so that its Git::Commit sees the stamped Changes (allow_dirty), and
-  # before GitHub::CreateRelease, which reads the release notes from Changes.
+  # before Author::GETTY::GitHubRelease, which reads the release notes from Changes.
   if ($self->is_task && !$self->no_changes) {
     $self->add_plugins([
       'NextRelease' => {
