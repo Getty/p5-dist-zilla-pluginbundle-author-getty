@@ -1,5 +1,6 @@
 
 requires 'App::cpanminus', '1.7049';
+requires 'Config::Identity', '0.0019';
 requires 'Dist::Zilla', '6.040';
 requires 'Dist::Zilla::Plugin::Alien', '0.024';
 requires 'Dist::Zilla::Plugin::AlienBuild', '0.33';
@@ -24,6 +25,8 @@ requires 'Dist::Zilla::Plugin::TaskWeaver', '0.101629';
 requires 'Dist::Zilla::Plugin::Test::ChangesHasContent', '0.011';
 requires 'Dist::Zilla::PluginBundle::Git', '2.052';
 requires 'Dist::Zilla::PluginBundle::Git::VersionManager', '0.007';
+requires 'Path::Tiny';
+requires 'Pithub', '0.01043';
 requires 'Pod::Elemental', '0.103006';
 requires 'Pod::Elemental::Transformer::List', '0.102001';
 requires 'Pod::Weaver', '4.022';
