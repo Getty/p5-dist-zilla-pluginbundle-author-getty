@@ -12,9 +12,10 @@
     to on).
     Dists without "binary" keys are unchanged.
 
-  - A GitHub-hosted dist now creates its release as a draft, attaches the
-    tarball and only then publishes it, so a release is never visible
-    without its tarball. A failed upload or publish fails "dzil release"
+  - The new plugin Author::GETTY::GitHubRelease replaces GitHub::CreateRelease
+    for every dist with a GitHub remote: it creates the release as a draft,
+    attaches the tarball and only then publishes it, so a release is never
+    visible without its tarball. A failed upload or publish fails "dzil release"
     loudly and leaves the draft in place for inspection. The release is
     marked as latest unless the dist ships binaries.
 
