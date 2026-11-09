@@ -16,6 +16,9 @@ use JSON::PP ();
 #    repository resources GithubMeta reports;
 #  - only a gitlab remote named upstream: [Repository] is pointed at it, so the
 #    dist gets its repository resource and no `git svn info` noise.
+# Without a remote the built META carries no empty resources hashes (the
+# SUPPORT template reads distmeta->{resources}{...}{web}, which used to
+# autovivify bugtracker and repository in the dist's own metadata).
 
 plan skip_all => "Dist::Zilla::Tester not available"
   unless eval { require Dist::Zilla::Tester; require Pod::Checker; 1 };
@@ -116,6 +119,13 @@ subtest 'build without a remote' => sub {
 
   unlike($stderr, qr/svn/, 'no `git svn info` probe on STDERR');
   my $meta = $tzil->distmeta;
+  for my $key (qw(bugtracker repository)) {
+    ok(!exists $meta->{resources} || !exists $meta->{resources}{$key} || keys %{ $meta->{resources}{$key} },
+      "distmeta: no empty resources.$key hash");
+  }
+  ok(!exists $meta->{resources}, 'distmeta: no resources key at all without a remote');
+  my $json = JSON::PP->new->decode($built->child('META.json')->slurp_raw);
+  ok(!exists $json->{resources}, 'META.json: no resources key at all without a remote');
   is_deeply($meta->{resources}{repository} // {}, {}, 'no repository resource values (there is nothing to report)');
 };
 

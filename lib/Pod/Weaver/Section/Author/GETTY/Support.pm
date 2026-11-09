@@ -15,7 +15,8 @@ use namespace::autoclean;
 Renders its text as L<Pod::Weaver::Section::GenerateSection> does and drops
 the section again when the rendered text is empty. The bundle's C<SUPPORT>
 template names the issue tracker and the IRC channel; a distribution with
-neither gets no C<SUPPORT> section at all instead of an empty heading.
+neither gets no C<SUPPORT> section at all instead of an empty heading. Reading
+the resources for the template leaves the distribution's metadata untouched.
 
 =method weave_section
 
@@ -26,6 +27,17 @@ removes it again if its text holds nothing but whitespace.
 
 around weave_section => sub {
   my ($orig, $self, $document, $input) = @_;
+
+  # GenerateSection fills its template stash from
+  # $input->{distmeta}{resources}{repository}{web} and the like, which
+  # autovivifies empty resources, repository and bugtracker hashes in the
+  # dist's own distmeta, the one META.json is written from. It gets a copy of
+  # distmeta with a copy of resources, which it may vivify freely.
+  if (ref $input->{distmeta} eq 'HASH') {
+    my %distmeta = %{ $input->{distmeta} };
+    $distmeta{resources} = { %{ $distmeta{resources} } } if ref $distmeta{resources} eq 'HASH';
+    $input = { %$input, distmeta => \%distmeta };
+  }
 
   my $before = scalar @{ $document->children };
   $self->$orig($document, $input);

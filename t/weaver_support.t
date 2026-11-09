@@ -2,6 +2,7 @@
 use strict;
 use warnings;
 use Test::More;
+use Storable qw(dclone);
 
 use Pod::Weaver;
 use Pod::Elemental::Document;
@@ -78,6 +79,51 @@ is($entry->[1], 'Pod::Weaver::Section::Author::GETTY::Support', 'the bundle uses
 
   ($text, $count) = weave({ bugtracker => { web => 'https://example.org/issues' }, x_IRC => 'irc://irc.perl.org/#x' });
   like($text, qr/=head2 Issues.*=head2 IRC/s, 'bugtracker and IRC: both parts, Issues first');
+}
+
+# The weaver reads distmeta->{resources}{...}{web}; that must not write into the
+# distribution's own metadata (the one META.json is written from).
+sub weave_meta {
+  my ($input) = @_;
+  my $doc = Pod::Elemental::Document->new;
+  my $class = $entry->[1];
+  eval "require $class; 1" or die $@;
+  $class->new(plugin_name => 'Support', weaver => Pod::Weaver->new, %{ { %{ $entry->[2] }, text => [ split /\n/, $entry->[2]{text} ] } })
+    ->weave_section($doc, $input);
+  my ($section) = @{ $doc->children };
+  return $section ? join("\n", map { $_->as_pod_string } @{ $section->children }) : '';
+}
+
+for my $case (
+  [ 'no resources key',            { name => 'Some-Dist', version => '1' } ],
+  [ 'empty resources',             { name => 'Some-Dist', resources => {} } ],
+  [ 'resources without bugtracker', { name => 'Some-Dist', resources => { homepage => 'https://example.org' } } ],
+  [ 'an empty bugtracker',         { name => 'Some-Dist', resources => { bugtracker => {} } } ],
+  [ 'a bugtracker',                { name => 'Some-Dist', resources => { bugtracker => { web => 'https://example.org/issues' } } } ],
+  [ 'bugtracker, repository, IRC', { name => 'Some-Dist', resources => {
+      bugtracker => { web => 'https://example.org/issues' }, repository => { web => 'https://example.org/r' },
+      x_IRC => 'irc://irc.perl.org/#x', x_IRC_user => 'Getty' } } ],
+) {
+  my ($label, $distmeta) = @$case;
+  my $before = dclone($distmeta);
+  my $input  = { zilla => {}, distmeta => $distmeta };
+  weave_meta($input);
+  is_deeply($distmeta, $before, "$label: the caller's distmeta is unchanged after the weave");
+  is($input->{distmeta}, $distmeta, "$label: the caller's input still holds the same distmeta");
+}
+
+{
+  my $distmeta = { name => 'Some-Dist', resources => { bugtracker => { web => 'https://example.org/issues' }, x_IRC => 'irc://irc.perl.org/#x' } };
+  my $text = weave_meta({ zilla => {}, distmeta => $distmeta });
+  is($text, (weave($distmeta->{resources}))[0], 'with a bugtracker and IRC the SUPPORT text is the same');
+  like($text, qr{=head2 Issues\s+Please report bugs and feature requests at\s+L<https://example.org/issues>.*=head2 IRC\s+Join C<#x> on C<irc.perl.org>}s,
+    '... and has the Issues and the IRC part');
+}
+
+{
+  my $text = eval { weave_meta({ zilla => {} }) };
+  is($@, '', 'a weave without distmeta works');
+  is($text, '', '... and leaves no SUPPORT section');
 }
 
 done_testing;
