@@ -1,0 +1,24 @@
+---
+class: standard
+completed: 2026-11-09T22:01:21Z
+created: 2026-11-09T19:10:28Z
+id: 23
+priority: low
+started: 2026-11-09T20:12:01Z
+status: done
+tags:
+- build
+- metadata
+title: '[Repository] still probes git svn info when the only remote is not origin'
+updated: 2026-11-09T22:01:21Z
+---
+
+Found under k16. With no GitHub and no Gitea remote the bundle adds [Repository], which reads only remote.<git_remote>.url (git_remote defaults to origin) and otherwise falls back to `git svn info` ("git: svn is not a git command" on stderr). k16 leaves [Repository] out when there is no remote at all; a repository whose only remote is e.g. upstream still gets [Repository] and the noise, and no resources.repository. Possible shape: pass git_remote => the name of the first remote from _remote_urls() (origin first). Behaviour change for such dists (they would gain resources.repository), so a decision, not a silent fix.
+
+2026-11-09 20:45 Fix form (branch k22-k25, uncommitted yet): new lazy _remote_name = the first entry of _remote_urls() (origin first), the same remote _remote_host describes. In the _has_remote branch of configure(), [Repository] gets git_remote => that name only when it is not origin; with origin the plugin config is exactly as before (no argument). Verified: only an upstream on gitlab -> resources.repository with type/url/web, stderr empty (main: svn noise and empty hashes); github origin -> byte-identical to main. Same gap in GiteaMeta and GithubMeta (read only remote.origin.url) filed as k26.
+
+2026-11-09 21:23 Tests (uncommitted): t/repository_remote.t +14: _remote_name (origin wins even when listed later; without origin the first remote in config order; undef without remote / without .git, forced inside the tempdir); plugin list: only upstream -> Repository {git_remote=>'upstream'}, several without origin -> the first, gitlab origin / origin+upstream / github origin with no_github=1 -> Repository without payload, no remote -> no Repository. t/support_build.t: full build with only a gitlab upstream -> resources.repository with type/url/web, no svn on STDERR. Counter-check against main: the new upstream/first-remote asserts red, the origin/no-remote ones green.
+
+2026-11-09 21:52 Commit 8104568 'Point [Repository] at the first remote when there is no origin' on branch k22-k25 (pushed, not merged). Changes: the Repository metadata entry says [Repository] reads origin, or the first remote when there is no origin. Bundle CI 42705661878 on k22-k25 tip 9b37c97: green on 5.36/5.38/5.40 (38 files, 1066 tests each; the new/extended tests ran; only skip release-changes_has_content.t without RELEASE_TESTING, as always). Ready for review.
+
+2026-11-09 22:01 Merged to main (7537e40..4fb338d), pushed; bundle installed to ~/perl5.
