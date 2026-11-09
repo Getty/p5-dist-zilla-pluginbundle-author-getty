@@ -1,3 +1,4 @@
+requires 'perl', '5.022';
 
 requires 'App::cpanminus', '1.7049';
 requires 'Config::Identity', '0.0019';
@@ -25,18 +26,23 @@ requires 'Dist::Zilla::Plugin::TaskWeaver', '0.101629';
 requires 'Dist::Zilla::Plugin::Test::ChangesHasContent', '0.011';
 requires 'Dist::Zilla::PluginBundle::Git', '2.052';
 requires 'Dist::Zilla::PluginBundle::Git::VersionManager', '0.007';
+requires 'Moose';
+requires 'namespace::autoclean';
 requires 'Path::Tiny';
 requires 'Pithub', '0.01043';
 requires 'Pod::Elemental', '0.103006';
 requires 'Pod::Elemental::Transformer::List', '0.102001';
 requires 'Pod::Weaver', '4.022';
-requires 'Pod::Weaver::Section::Support', '1.014';
 
 # Only the local pp check of a binary dist (see the Binaries section); DZIL_BINARY_SKIP=1 skips it.
-recommends 'PAR::Packer';
+# 1.031 is the first pp to take the namespace forms of -M (binary_modules = Foo::*).
+recommends 'PAR::Packer', '1.031';
 
 on test => sub {
+  # t/binary-scripts.t loads the .github/dzil-binary gate scripts, which use it.
   requires 'Archive::Zip';
+  requires 'Module::Runtime';
+  requires 'Software::License';
   requires 'Test::More', '1.302226';
 };
 
