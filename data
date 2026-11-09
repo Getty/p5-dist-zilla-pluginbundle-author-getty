@@ -1,0 +1,43 @@
+---
+class: standard
+completed: 2026-11-09T19:42:22Z
+created: 2026-11-07T22:50:10Z
+id: 21
+priority: medium
+started: 2026-11-09T18:40:25Z
+status: done
+tags:
+- binary
+- windows
+title: pp-args.pl run_in hangs on Windows (Win32 fork+exec+pipe), reached only with
+  binary_pp_args
+updated: 2026-11-09T19:42:58Z
+---
+
+Found during k20 Task 7 (Windows lib-gate deadlock). lib-gate.pl run_tool used pipe + fork + exec; under the emulated fork on MSWin32 the parent never sees EOF and the "Pack and gate" step hung until cancelled. Fixed there with run_tool_win32 (list-form pipe open, `open my $fh, "-|", @cmd`, Win32 since Perl 5.22).
+
+.github/dzil-binary/pp-args.pl run_in (sh -c <cmd> in <dir>) has the same pipe+fork+exec shape, so a dist with binary_pp_args would hang the Windows leg the same way. mcp-wiki does not set binary_pp_args, so k20 is not blocked.
+
+Fix shape: on MSWin32 chdir in the parent (or local-ize cwd) and read `open my $fh, "-|", "sh", "-c", $cmd`; which sh exists on the Windows leg (Git Bash) needs checking. Tests: same pattern as the run_tool_win32 tests in t/binary-scripts.t (local $^O = "MSWin32").
+
+Fix form (branch k16-k21): run_in dispatches to run_in_win32 on MSWin32, same pattern as run_tool_win32 in lib-gate.pl. No fork: chdir to dir in the parent, list-form open "-|", "sh", "-c", "IFS=; set -f; exec sh -c $DZIL_BINARY_PP_ARGS" with the command in local $ENV{DZIL_BINARY_PP_ARGS}, cwd restored right after the spawn (also on failure). Why the command goes through the environment: Perl joins a list-form spawn into one CreateProcess command line and never escapes an embedded " (win32/win32.c create_command_line, 5.40.1: an argument is wrapped in " only when it has whitespace and no "); MSYS2 sh then re-parses that line by rules of its own (git-for-windows msys2-runtime dcrt0.cc build_argv/quoted/globify: single quotes quote, \\ becomes \, words with ?*[\"(){} are globbed). So `printf "%s\n" -a "x y"` would arrive as `printf` alone. The fixed script holds neither " nor \; with IFS empty and globbing off the variable expands to one word: a fresh sh -c <cmd>, $0=sh, $#=0, as on Unix. Empty pp_args returns "" without starting sh.
+
+Which sh on the Windows leg (from dzil-binary.yml + build-leg.sh): the build steps run with shell: bash = Git for Windows bash.exe (C:\Program Files\Git\bin\bash.exe), which puts <Git>\mingw64\bin;<Git>\usr\bin;%HOME%\bin in front of PATH; then the setup-perl entries (Strawberry perl\site\bin, perl\bin, c\bin) and the machine PATH (Git\bin, Git\cmd, Git\mingw64\bin, Git\usr\bin). leg_env lib puts Strawberry perl\bin and local\bin first. When bash starts perl.exe, MSYS converts PATH to Windows form. Perl (qualified_path) looks in the current directory first, then in each PATH entry for sh.exe/sh.cmd/sh.bat/sh. Strawberry ships no sh, mingw64\bin has none, so the first hit is C:\Program Files\Git\usr\bin\sh.exe (MSYS2 bash in sh mode). build-leg.sh hook() finds the same /usr/bin/sh through bash itself and is not affected by the quoting (MSYS to MSYS passes argv directly). Residual risk: an sh(.exe/.cmd/.bat) in the dist root would win (current-directory lookup). To be confirmed by the windows-latest probe (where sh, command -v sh, Perl lookup order).
+
+Tests: t/binary-scripts.t, run_in_win32 block (local $^O = "MSWin32"): dispatch, cwd/$#/$0, cwd and %ENV restored, command arrives unchanged (", double space, {a,b}, \\, *), empty command, exit 3, bad dir, no sh on PATH.
+
+Drift filed: k22 (same quoting on the local build path in Binary.pm on native Windows).
+
+Done on branch k16-k21 (pushed, not merged): commit 0f56bdf "Run binary_pp_args without fork on Windows" (pp-args.pl run_in_win32 + t/binary-scripts.t). Changes unchanged for this card: the binary form is unreleased, the existing entry already lists pp-args.pl among the build-leg helpers (release-manager decision).
+
+Bundle CI on k16-k21 @ 0e2264c: run 42683567301, green on 5.36/5.38/5.40.
+
+Windows proof (throwaway branch k21-probe, workflow on windows-latest + Strawberry 5.40.4, deleted from origin and locally afterwards; the probe commit never reached k16-k21 or main):
+- before the fix: run 42683563962 @ 2ba725e (main + probe commit) - failure. Case (a) hung until the step timeout (19:28:51 -> 19:31:59, "timed out after 3 minutes"); the pseudo-fork exec also mangled the command (cygpath ran without its argument).
+- with the fix: run 42684395374 @ 809db94 (probe commit + both k16-k21 commits) - success, pp-args step 1 s. All four cases exact: cwd = dist_root and $# = 0; "/x y;lib/z" kept; "x  y", {a,b}, q\\z, * kept; exit 3 -> "binary_pp_args failed (exit 3)" and no argv.
+
+sh confirmed on the runner: bash is Git for Windows /usr/bin/bash 5.3.15, MSYSTEM=UCRT64 (this Git ships ucrt64, not mingw64). `where sh` and Perl lookup order both give C:\Program Files\Git\usr\bin\sh.exe, the sh pp_args ran in. A naive list-form open of `printf "%s\n" -a "x  y"` gave exit 2 and no output: the quoting problem is real.
+
+Committed 0f56bdf on k16-k21; CI 42683567301 green; Windows probe 42683563962 (before, hung) / 42684395374 (after, green). Awaiting merge by the hub.
+
+2026-11-09 19:42 Merged to main 0f56bdf, pushed; bundle installed to ~/perl5.
