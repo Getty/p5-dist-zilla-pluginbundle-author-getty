@@ -1,0 +1,25 @@
+---
+class: standard
+completed: 2026-11-09T22:01:02Z
+created: 2026-11-09T19:10:23Z
+id: 22
+priority: low
+started: 2026-11-09T20:11:57Z
+status: done
+tags:
+- binary
+- windows
+title: 'Local binary build on native Windows: pp_args/verify/smoke commands with "
+  are split apart on the command line'
+updated: 2026-11-09T22:01:02Z
+---
+
+Found under k21. lib/Dist/Zilla/Plugin/Author/GETTY/Binary.pm runs binary_pp_args as open "-|", "sh", "-c", $pp_args (~line 139) and verify/smoke as system("sh", "-c", "$cmd \"\$@\"", "sh", $out) (~line 155). On MSWin32 Perl joins the list into one CreateProcess command line and wraps an argument in " only when it has whitespace and no " - an embedded " is never escaped (win32/win32.c create_command_line, 5.40.1). The MSYS2 sh then re-parses that line with rules of its own (git-for-windows msys2-runtime dcrt0.cc build_argv/quoted/globify: single quotes quote too, \\ becomes \, words with ?*[\"(){} are globbed). verify/smoke always carry a " in the script, so a local "dzil build" with binary keys on native Windows perl mangles them; pp_args only when the command holds a ". The CI legs are not affected (k21 fixed pp-args.pl; build-leg.sh hook() is MSYS-to-MSYS). Fix shape as in pp-args.pl run_in_win32: hand the command over through the environment and run a fixed script without " or \.
+
+2026-11-09 20:45 Findings and fix form (branch k22-k25, uncommitted yet). Reachability: on native Windows after_build on main never got past _find_pp ("pp not found in PATH"): Perl 5.40.1 win32.c win32_stat_low marks only .exe/.bat/.cmd/.com executable, so -x is false for Strawberry site\bin\pp (extensionless Perl script next to pp.bat, installed by MakeMaker FIXIN=pl2bat). So pp_args/verify/smoke never ran there; making the check reachable belongs to this card. Fix: _find_pp accepts -f on Win32; _run_pp starts pp as `$^X pp ARG...` (not pp.bat through cmd.exe, which has metacharacter rules of its own), every argument quoted for the C runtime parser of perl.exe (_win32_arg: backslashes before a " or at the end doubled, " escaped; create_command_line passes an argument that starts and ends in " unchanged); _pp_args_output and _run_hook hand the script (and the binary path) over through the environment and run a fixed sh script without " or \ (IFS=; set -f; exec sh -c $VAR [sh $OUT]), as run_in_win32 in pp-args.pl; empty pp_args returns "" without sh. Win32 output named NAME.exe like the release asset (cmd.exe/PowerShell/PATH search start a bare name only as NAME.exe). Unix paths unchanged. Residual: File::Spec->path puts . first on Win32, so a pp in the build root would win.
+
+2026-11-09 21:23 Tests (uncommitted): new t/binary-win32.t (72 asserts). Emulates Win32 via local $^O='MSWin32' on Linux; $^X is an argv-recording stub, and the command line is rebuilt from that argv and split by a reference parser of the MSVCRT rules. Covers _win32_arg round trip ('', ", trailing \, C:\a b\, %PATH%, ^&|<>(), embedded quotes, tab), _find_pp (non-executable pp found only on MSWin32, a directory pp never), _run_pp ($^X + quoted args, exit status; Unix argv unchanged), _pp_args_output/_run_hook (command reaches sh unchanged via DZIL_BINARY_PP_ARGS / DZIL_BINARY_HOOK+OUT, %ENV restored, empty pp_args needs no sh), after_build NAME.exe plus all three failure messages and 'pp not found in PATH'; Unix after_build argv and NAME unchanged. Counter-check against main: all Win32 blocks red, Unix blocks green. Not a real Windows run, that is the k22-probe.
+
+2026-11-09 21:52 Commit 7537e40 'Run the local binary check on native Windows' on branch k22-k25 (pushed, not merged). Changes: the existing Binary entry gains the native-Windows sentence. Windows probe (push-triggered workflow on the throwaway branch k22-probe, never on main): run 42705196908 on P 146a77f (main + probe yml) red as expected, 'pp not found in PATH' in all four cases; run 42705579271 on c2888a8 (P + the four commits) green, 11/11 checks on windows-latest, Strawberry 5.40.4, paths with a blank and ': exact pp argv, NAME.exe, verify/smoke get $0=sh $#=1 $1=binary, empty pp_args, failing pp_args, failing verify. Observed there: Strawberry's pp is -f 1 -x 0, pp.bat -x 1; main's sh spawn shapes break on Windows (printf usage, exit 2). The line 'exit: too many arguments' in case (d) comes from the probe's own verify command (hooks get "$@" appended by contract, so 'exit 3' becomes 'exit 3 OUT'); the exit status stays non-zero, not a defect. k22-probe deleted on origin and locally. Bundle CI 42705661878 on k22-k25 tip 9b37c97: green on 5.36/5.38/5.40 (38 files, 1066 tests each; the new/extended tests ran; only skip release-changes_has_content.t without RELEASE_TESTING, as always). Ready for review.
+
+2026-11-09 22:00 Merged to main (7537e40..4fb338d), pushed; bundle installed to ~/perl5.
