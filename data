@@ -1,0 +1,24 @@
+---
+class: standard
+completed: 2026-11-09T22:02:02Z
+created: 2026-11-09T19:10:38Z
+id: 25
+priority: low
+started: 2026-11-09T20:12:14Z
+status: done
+tags:
+- build
+- metadata
+title: META resources carry empty bugtracker/repository hashes without a remote
+updated: 2026-11-09T22:02:02Z
+---
+
+Found under k16 (pre-existing, unchanged by it). Building a dist without a remote gives META.json "resources":{"bugtracker":{},"repository":{}}: the SUPPORT template stash of GenerateSection reads distmeta->{resources}{bugtracker}{web} and autovivifies the hashes. Check whether it is the weaver stash or another reader, and whether CPAN::Meta validation or metacpan care; leave the GitHub case byte-identical.
+
+2026-11-09 20:45 Cause confirmed: hooking Pod::Weaver weave_document and diffing distmeta->{resources} after every step, only @GETTY/Support changes it (absent -> {bugtracker=>{}, repository=>{}}): the template stash of GenerateSection (lines 154-170) reads $input->{distmeta}{resources}{repository}{web} etc. and autovivifies in the dist own distmeta, the one META.json is written from. Fix (branch k22-k25, uncommitted yet): the around weave_section in Pod::Weaver::Section::Author::GETTY::Support passes GenerateSection a copy of distmeta with its own copy of resources; one level is enough (reading {x}{web} only creates x). Verified: no remote -> META without a resources key (main: {"bugtracker":{},"repository":{}}); github origin byte-identical. The old output was valid (CPAN::Meta validator accepts both), only noise.
+
+2026-11-09 21:23 Tests (uncommitted): t/weaver_support.t +16: six distmeta inputs (no resources, empty, without bugtracker, empty bugtracker, bugtracker, bugtracker+repository+IRC); the caller's distmeta is deep-equal after the weave and $input->{distmeta} is the same reference; SUPPORT text unchanged; a weave without distmeta works and yields no section. t/support_build.t: full build without remote -> no resources key in distmeta and META.json, no empty bugtracker/repository. Counter-check against main: 5 of 6 weave cases and the no-remote build red (the bugtracker+repository case vivifies nothing on main either).
+
+2026-11-09 21:52 Commit 94ed863 'Keep empty resources out of META without a remote' on branch k22-k25 (pushed, not merged). Changes: the Repository metadata entry says a dist without a remote builds without empty bugtracker or repository entries in META.json. Bundle CI 42705661878 on k22-k25 tip 9b37c97: green on 5.36/5.38/5.40 (38 files, 1066 tests each; the new/extended tests ran; only skip release-changes_has_content.t without RELEASE_TESTING, as always). Ready for review.
+
+2026-11-09 22:01 Merged to main (7537e40..4fb338d), pushed; bundle installed to ~/perl5.
