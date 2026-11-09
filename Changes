@@ -35,8 +35,10 @@
     broken binary fails locally instead of in the release workflow. "dzil
     release" requires .github/workflows/binaries.yml calling the shared
     dzil-binary.yml and dies without it. The dzil-test action sets
-    DZIL_BINARY_SKIP=1, so CI builds skip the pp step. Dists without
-    "binary" keys are unchanged.
+    DZIL_BINARY_SKIP=1, so CI builds skip the pp step. On native Windows the
+    local pp step starts pp with the building perl, writes the binary as
+    NAME.exe and hands binary_pp_args and the verify and smoke commands to sh
+    unchanged. Dists without "binary" keys are unchanged.
 
   - Build-leg helper scripts for the shared binary release workflow live in
     .github/dzil-binary (plan.pl, pp-args.pl, require-gate.pl, lib-gate.pl,

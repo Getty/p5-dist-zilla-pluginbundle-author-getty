@@ -100,12 +100,73 @@ sub _pp_args_lines {
   return grep { length } map { s/\r\z//r } split /\n/, $output;
 }
 
+# Win32: -x is true there only for .exe, .bat, .cmd and .com (win32.c,
+# win32_stat_low), never for pp, a Perl script without an extension next to its
+# pp.bat; _run_pp starts it with $^X.
 sub _find_pp {
   for my $dir (File::Spec->path) {
     my $pp = File::Spec->catfile($dir, 'pp');
-    return $pp if -f $pp && -x _;
+    return $pp if -f $pp && ($^O eq 'MSWin32' || -x _);
   }
   return;
+}
+
+# Runs pp. Win32: Perl joins a list into one CreateProcess command line and
+# never escapes an embedded " (win32.c, create_command_line: an argument is
+# wrapped in " only when it has whitespace and no "), but passes one that starts
+# and ends in " unchanged. So pp runs as `$^X pp ARG...` (not through pp.bat
+# and cmd.exe), each argument quoted for the C runtime's parser of perl.exe:
+# backslashes before a " or at the end doubled, " escaped.
+sub _run_pp {
+  my (@cmd) = @_;
+  return system(@cmd) unless $^O eq 'MSWin32';
+  return system($^X, map { _win32_arg($_) } @cmd);
+}
+
+sub _win32_arg {
+  my ($arg) = @_;
+  $arg =~ s/(\\*)"/$1$1\\"/g;
+  $arg =~ s/(\\+)\z/$1$1/;
+  return qq{"$arg"};
+}
+
+# Win32, sh (_pp_args_output, _run_hook): the same command line, and the MSYS2
+# sh splits it again by rules of its own (' quotes too, \\ becomes \, words are
+# globbed). So the script and its argument go in the environment, and the fixed
+# script on the command line holds neither " nor \: with IFS empty and globbing
+# off each variable expands to exactly one word, a fresh sh -c SCRIPT [sh ARG],
+# as on Unix. The same fix as run_in_win32 in .github/dzil-binary/pp-args.pl.
+
+# The output of `sh -c CMD`, the binary's pp_args; fails the build when it fails.
+sub _pp_args_output {
+  my ($self, $cmd) = @_;
+  my $name = $self->binary_name;
+  my ($ph, $why);
+  if ($^O ne 'MSWin32') {
+    open $ph, '-|', 'sh', '-c', $cmd or $why = "$!";
+  }
+  elsif (!length $cmd) {
+    return '';   # sh -c '' prints nothing; exec sh -c without a word fails
+  }
+  else {
+    local $ENV{DZIL_BINARY_PP_ARGS} = $cmd;
+    # $! read before the local is undone: restoring %ENV may clobber errno
+    open $ph, '-|', 'sh', '-c', 'IFS=; set -f; exec sh -c $DZIL_BINARY_PP_ARGS' or $why = "$!";
+  }
+  $self->log_fatal("cannot run binary_pp_args of $name: $why") if defined $why;
+  my $output = do { local $/; <$ph> };
+  close $ph or $self->log_fatal("binary_pp_args of $name failed: $cmd");
+  return $output // '';
+}
+
+# Runs `sh -c 'CMD "$@"' sh ARG`, CMD with ARG as its argument.
+sub _run_hook {
+  my ($cmd, $arg) = @_;
+  my $script = "$cmd \"\$@\"";
+  return system('sh', '-c', $script, 'sh', $arg) unless $^O eq 'MSWin32';
+  local $ENV{DZIL_BINARY_HOOK} = $script;
+  local $ENV{DZIL_BINARY_OUT}  = $arg;
+  return system('sh', '-c', 'IFS=; set -f; exec sh -c $DZIL_BINARY_HOOK sh $DZIL_BINARY_OUT');
 }
 
 # Runs in the build root; dies naming the command when it fails.
@@ -131,28 +192,26 @@ sub after_build {
   my $build = Path::Tiny::path($arg->{build_root})->absolute->stringify;
   my $sib   = "$build-binaries";
   Path::Tiny::path($sib)->mkpath;
-  my $out = "$sib/$name";
+  # Win32: NAME.exe, like the release asset: cmd.exe, PowerShell and the PATH
+  # search of CreateProcess start a bare NAME only as NAME.exe
+  my $out = "$sib/$name" . ($^O eq 'MSWin32' ? '.exe' : '');
 
   _in_dir($build, sub {
     my @extra;
     if (defined $self->pp_args) {
-      open my $ph, '-|', 'sh', '-c', $self->pp_args
-        or $self->log_fatal("cannot run binary_pp_args of $name: $!");
-      my $output = do { local $/; <$ph> };
-      close $ph or $self->log_fatal("binary_pp_args of $name failed: " . $self->pp_args);
-      @extra = _pp_args_lines($output // '');
+      @extra = _pp_args_lines($self->_pp_args_output($self->pp_args));
     }
     my @cmd = ( $pp, '-o', $out, '-I', "$build/lib",
       ( map { ('-M', $_) } @{ $self->modules } ), @extra, "$build/" . $self->script );
     $self->log("packing $name");
     local $ENV{PAR_VERBATIM} = 1;
-    system(@cmd) == 0 or $self->log_fatal("pp failed for binary $name (exit " . ($? >> 8) . ")");
+    _run_pp(@cmd) == 0 or $self->log_fatal("pp failed for binary $name (exit " . ($? >> 8) . ")");
 
     for my $hook (qw( verify smoke )) {
       my $cmd = $self->$hook;
       next unless defined $cmd;
       $self->log("$hook $name");
-      system('sh', '-c', "$cmd \"\$@\"", 'sh', $out) == 0
+      _run_hook($cmd, $out) == 0
         or $self->log_fatal("binary_$hook failed for $name: $cmd");
     }
   });
