@@ -909,6 +909,109 @@ sub dead {
 }
 # untested: run_tool_win32 "cannot wait for <cmd>" ($? == -1 after close) -- not reachable from a test.
 
+# --- pp-args.pl run_in on Win32: list-form pipe open of sh, no fork ------------
+# Same technique: `local $^O` sends run_in down run_in_win32 on Linux.
+
+{
+  my @seen;
+  my $r = do {
+    no warnings 'redefine';
+    local *DzilBinary::PPArgs::run_in_win32 = sub { @seen = @_; return 'stub' };
+    local $^O = 'MSWin32';
+    DzilBinary::PPArgs::run_in('/some/dir', 'some cmd');
+  };
+  is_deeply(\@seen, ['/some/dir', 'some cmd'], 'run_in_win32_dispatch: MSWin32 hands ($dir, $cmd) to run_in_win32');
+  is($r, 'stub', 'run_in_win32_dispatch: run_in returns what run_in_win32 returned');
+
+  @seen = ();
+  my $d = tempdir(CLEANUP => 1);
+  my $u = do {
+    no warnings 'redefine';
+    local *DzilBinary::PPArgs::run_in_win32 = sub { @seen = @_; return 'stub' };
+    DzilBinary::PPArgs::run_in($d, 'echo unix');
+  };
+  is_deeply(\@seen, [], 'run_in_win32_dispatch: on this platform the Unix path runs, not run_in_win32');
+  is($u, "unix\n", 'run_in_win32_dispatch: ... and it ran the command');
+}
+
+{
+  my $d = abs_path(tempdir(CLEANUP => 1));
+  my $start = Cwd::getcwd();
+  local $^O = 'MSWin32';
+
+  is(DzilBinary::PPArgs::run_in($d, 'pwd'), "$d\n", 'run_in_win32_cwd: the command runs in $dir');
+  is(Cwd::getcwd(), $start, 'run_in_win32_cwd: the test process cwd is unchanged afterwards');
+
+  is(DzilBinary::PPArgs::run_in($d, 'echo "$#:$0"'), "0:sh\n",
+    'run_in_win32_shell: a fresh `sh -c <cmd>`: no positional arguments, $0 is sh');
+
+  # the environment variable carrying the command does not leak
+  delete local $ENV{DZIL_BINARY_PP_ARGS};
+  DzilBinary::PPArgs::run_in($d, 'echo "$DZIL_BINARY_PP_ARGS"');
+  ok(!exists $ENV{DZIL_BINARY_PP_ARGS}, 'run_in_win32_env: DZIL_BINARY_PP_ARGS is not left in %ENV');
+  $ENV{DZIL_BINARY_PP_ARGS} = 'before';
+  DzilBinary::PPArgs::run_in($d, 'true');
+  is($ENV{DZIL_BINARY_PP_ARGS}, 'before', 'run_in_win32_env: a value set beforehand is restored');
+  delete $ENV{DZIL_BINARY_PP_ARGS};
+
+  # The command reaches the inner sh unchanged. A logging sh in front of PATH
+  # records every invocation's argv, then runs the real sh.
+  my $bin = "$d/fakebin";
+  my $log = "$d/sh.log";
+  spew("$bin/sh", <<"SH");
+#!/bin/sh
+for a in "\$@"; do printf '%s\\0' "\$a" >> '$log'; done
+printf 'END\\0' >> '$log'
+exec /bin/sh "\$@"
+SH
+  chmod 0755, "$bin/sh";
+  my $cmd = q{printf '<%s>' "a  b" {a,b} \\\\ * 'q'};
+  my $out = do { local $ENV{PATH} = "$bin:$ENV{PATH}"; DzilBinary::PPArgs::run_in($d, $cmd) };
+  my @calls; my @cur;
+  for my $e (split /\0/, slurp($log)) { if ($e eq 'END') { push @calls, [@cur]; @cur = () } else { push @cur, $e } }
+  is(scalar @calls, 2, 'run_in_win32_argv: the outer sh and the inner sh were started');
+  is_deeply($calls[0], ['-c', 'IFS=; set -f; exec sh -c $DZIL_BINARY_PP_ARGS'],
+    'run_in_win32_argv: the outer sh gets only the fixed script');
+  is_deeply($calls[1], ['-c', $cmd],
+    'run_in_win32_argv: the inner sh gets the command as exactly one word, unchanged (double space, {a,b}, \\\\, *)');
+  my $unix = do { local $ENV{PATH} = "$bin:$ENV{PATH}"; local $^O = "linux"; DzilBinary::PPArgs::run_in($d, $cmd) };
+  is($out, $unix, 'run_in_win32_argv: the output equals that of the Unix path');
+
+  # empty command: nothing is started
+  my $empty = tempdir(CLEANUP => 1);
+  my $res = do { local $ENV{PATH} = $empty; DzilBinary::PPArgs::run_in($d, '') };
+  is($res, '', 'run_in_win32_empty: an empty command gives the empty string, without starting sh');
+  is(Cwd::getcwd(), $start, 'run_in_win32_empty: cwd unchanged');
+
+  # failures
+  my $err = '';
+  eval { DzilBinary::PPArgs::run_in($d, 'exit 3'); 1 } or $err = $@;
+  is($err, "binary_pp_args failed (exit 3): exit 3\n", 'run_in_win32_exit: dies with exactly the exit message');
+  is(Cwd::getcwd(), $start, 'run_in_win32_exit: cwd unchanged');
+
+  $err = '';
+  eval { DzilBinary::PPArgs::run_in("$d/no-such-dir", 'echo x'); 1 } or $err = $@;
+  is(scalar(() = $err =~ /cannot chdir to \Q$d\E\/no-such-dir: /g), 1, 'run_in_win32_chdir: "cannot chdir to" appears exactly once');
+  is(scalar(() = $err =~ /binary_pp_args failed: echo x/g), 1, 'run_in_win32_chdir: "binary_pp_args failed" appears exactly once');
+  is(Cwd::getcwd(), $start, 'run_in_win32_chdir: cwd unchanged');
+  ok(!exists $ENV{DZIL_BINARY_PP_ARGS}, 'run_in_win32_chdir: %ENV untouched');
+
+  $err = '';
+  my @warn;
+  {
+    local $SIG{__WARN__} = sub { push @warn, $_[0] };   # Linux warns `Can't exec "sh"`
+    local $ENV{PATH} = $empty;
+    eval { DzilBinary::PPArgs::run_in($d, 'echo x'); 1 } or $err = $@;
+  }
+  is(scalar(() = $err =~ /cannot run sh: \S/g), 1, 'run_in_win32_nosh: "cannot run sh: <reason>" appears exactly once');
+  is(scalar(() = $err =~ /binary_pp_args failed: echo x/g), 1, 'run_in_win32_nosh: "binary_pp_args failed" appears exactly once');
+  is(Cwd::getcwd(), $start, 'run_in_win32_nosh: cwd unchanged');
+  ok(!exists $ENV{DZIL_BINARY_PP_ARGS}, 'run_in_win32_nosh: %ENV untouched');
+  ok(!grep({ !/Can't exec "sh"/ } @warn), 'run_in_win32_nosh: the only warnings are the expected exec ones');
+}
+# untested: run_in_win32 "cannot chdir back" and "cannot read the current directory" -- the directory
+# cannot be removed or made unreadable under the test's feet portably.
+
 # --- win-dlls.pl and the lib-gate.pl split it uses -------------------------
 # build-leg.sh (which calls win-dlls.pl on the Windows leg only) has no harness:
 # it is covered only by the controller's Windows probe.

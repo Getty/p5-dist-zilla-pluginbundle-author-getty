@@ -4,6 +4,7 @@
 package DzilBinary::PPArgs;
 use strict;
 use warnings;
+use Cwd ();
 use JSON::PP ();
 use POSIX ();
 
@@ -17,6 +18,7 @@ sub pp_args_lines {
 # Runs `sh -c <cmd>` in $dir without an argument; dies if it fails.
 sub run_in {
   my ($dir, $cmd) = @_;
+  return run_in_win32($dir, $cmd) if $^O eq 'MSWin32';
   pipe(my $r, my $w) or die "pipe: $!\n";
   my $pid = fork // die "fork: $!\n";
   if (!$pid) {
@@ -30,6 +32,36 @@ sub run_in {
   my $out = do { local $/; <$r> };
   close $r;
   waitpid $pid, 0;
+  die "binary_pp_args failed (exit " . ($? >> 8) . "): $cmd\n" if $?;
+  return $out // '';
+}
+
+# Win32: fork is emulated there and pipe handles are not duplicated reliably
+# into the pseudo-process (perlfork, BUGS), so the pipe + fork + exec above never
+# sees EOF (the same fix as run_tool_win32 in lib-gate.pl). sh is started with a
+# list-form pipe open from $dir; the parent's cwd is restored right after.
+# $cmd does not travel on the command line: Perl joins the list into one
+# CreateProcess command line without escaping an embedded " (win32.c,
+# create_command_line), and the MSYS2 sh splits it again by rules of its own
+# (' quotes too, \\ becomes \, words are globbed). It goes in the environment;
+# the fixed script holds neither " nor \, and with IFS empty and globbing off
+# the variable expands to exactly one word: a fresh sh -c <cmd>, as on Unix.
+sub run_in_win32 {
+  my ($dir, $cmd) = @_;
+  return '' unless length $cmd;   # sh -c '' prints nothing; exec sh -c without a word fails
+  my $back = Cwd::getcwd() // die "cannot read the current directory: $!\n";
+  chdir $dir or die "cannot chdir to $dir: $!\nbinary_pp_args failed: $cmd\n";
+  my ($fh, $why);
+  my $started = do {
+    local $ENV{DZIL_BINARY_PP_ARGS} = $cmd;
+    my $ok = open $fh, '-|', 'sh', '-c', 'IFS=; set -f; exec sh -c $DZIL_BINARY_PP_ARGS';
+    $why = "$!";   # before the local is undone: restoring %ENV may clobber errno
+    $ok;
+  };
+  chdir $back or die "cannot chdir back to $back: $!\n";
+  die "cannot run sh: $why\nbinary_pp_args failed: $cmd\n" unless $started;
+  my $out = do { local $/; <$fh> };
+  close $fh;   # false on a non-zero exit; $? holds the status either way
   die "binary_pp_args failed (exit " . ($? >> 8) . "): $cmd\n" if $?;
   return $out // '';
 }
