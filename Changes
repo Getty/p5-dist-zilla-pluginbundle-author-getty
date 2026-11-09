@@ -1,5 +1,11 @@
 {{$NEXT}}
 
+  - The SUPPORT section is written when the dist has an issue tracker or an
+    IRC resource.
+  - Repository metadata comes from GithubMeta for a GitHub remote, from
+    GiteaMeta for a Gitea or Forgejo remote and from [Repository] for any
+    other remote; a repository without a remote builds without one.
+
   - New option family for dists that ship standalone binaries: "binary = name"
     (repeatable) with the optional "binary_modules", "binary_require",
     "binary_platforms", "binary_pp_args", "binary_verify", "binary_smoke" and

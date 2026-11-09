@@ -149,7 +149,7 @@ This bundle automatically generates the following standard sections:
 * C<DESCRIPTION> - from C<=head1 DESCRIPTION> in source
 * C<OVERVIEW> - from C<=head1 OVERVIEW> in source (optional)
 * C<STABILITY> - from C<=head1 STABILITY> in source (optional)
-* C<SUPPORT> - GitHub issues (if available) and IRC contact info
+* C<SUPPORT> - issue tracker and IRC contact info; left out when there is neither
 * C<CONTRIBUTING> - contribution guidelines
 * C<AUTHORS> - from distribution metadata
 * C<LICENSE AND COPYRIGHT> - from distribution metadata
@@ -215,7 +215,7 @@ END_TEMPLATE
   push @plugins, (
     [ '@GETTY/Leftovers', _exp('Leftovers'),    {} ],
     [ '@GETTY/postlude',  _exp('Region'),       { region_name => 'postlude' } ],
-    [ '@GETTY/Support',   _exp('GenerateSection'), {
+    [ '@GETTY/Support',   _exp('Author::GETTY::Support'), {
       title => 'SUPPORT',
       is_template => 1,
       text => $support_template,

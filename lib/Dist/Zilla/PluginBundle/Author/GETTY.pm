@@ -94,7 +94,8 @@ In default configuration it is equivalent to:
   meta_noindex    = 1
 
   [GithubMeta]      ; with a GitHub remote; a Gitea/Forgejo remote gets
-                    ; [Author::GETTY::GiteaMeta], anything else [Repository]
+                    ; [Author::GETTY::GiteaMeta], any other remote
+                    ; [Repository], no remote at all none of them
 
   [InstallRelease]
   install_command = cpanm .
@@ -247,7 +248,8 @@ L<Dist::Zilla::Plugin::PodWeaver>.
 =head2 no_github
 
 If set to 1, this attribute will disable L<Dist::Zilla::Plugin::GithubMeta> and
-will add L<Dist::Zilla::Plugin::Repository> instead. It also disables
+will add L<Dist::Zilla::Plugin::Repository> instead (if the repository has a
+remote, see below). It also disables
 L<Dist::Zilla::Plugin::Author::GETTY::GitHubRelease>.
 
 When unset, the bundle auto-detects whether the repository has a remote
@@ -261,11 +263,12 @@ For repository metadata in the no-GitHub case the bundle is forge-aware: a
 remote pointing at a Gitea/Forgejo host gets proper C<repository>/
 C<bugtracker>/C<homepage> resources via
 L<Dist::Zilla::Plugin::Author::GETTY::GiteaMeta> (the Gitea/Forgejo counterpart
-of L<Dist::Zilla::Plugin::GithubMeta>); anything else falls back to the generic
-L<Dist::Zilla::Plugin::Repository>. The known Gitea hosts (C<codeberg.org> and
-the author's own instance) are detected automatically; for any other
-self-hosted Gitea/Forgejo instance set L</gitea>. Purely additive —
-GitHub-hosted distributions are unaffected.
+of L<Dist::Zilla::Plugin::GithubMeta>); any other remote falls back to the
+generic L<Dist::Zilla::Plugin::Repository>. A repository without any remote
+gets none of them: there is no URL to report. The known Gitea hosts
+(C<codeberg.org> and the author's own instance) are detected automatically;
+for any other self-hosted Gitea/Forgejo instance set L</gitea>. Purely
+additive — GitHub-hosted distributions are unaffected.
 
 =head2 gitea
 
@@ -808,6 +811,18 @@ has _has_github_remote => (
   lazy    => 1,
   default => sub {
     return (grep { $_->[1] =~ m{\bgithub\.com\b}i } _remote_urls()) ? 1 : 0;
+  },
+);
+
+# True if the repository has any remote at all. Without one there is no URL
+# for [Repository] to report: it would only fall back to `git svn info`.
+has _has_remote => (
+  is      => 'ro',
+  isa     => 'Bool',
+  lazy    => 1,
+  default => sub {
+    my @remotes = _remote_urls();
+    return @remotes ? 1 : 0;
   },
 );
 
@@ -1477,7 +1492,9 @@ sub configure {
   # Repository metadata. Three-way, additive: GitHub dists keep GithubMeta
   # exactly as before; Gitea/Forgejo dists (a known host, or gitea = 1) get
   # proper forge URLs via Author::GETTY::GiteaMeta built for the actual remote
-  # host; anything else falls back to the generic Repository.
+  # host; anything else with a remote falls back to the generic Repository.
+  # Without any remote there is no URL to report, and Repository would only
+  # run `git svn info` ("git: 'svn' is not a git command"), so none is added.
   if (!$self->no_github) {
     $self->add_plugins([ 'GithubMeta' => { issues => 1 } ]);
   }
@@ -1487,7 +1504,7 @@ sub configure {
       host   => $self->_remote_host,
     } ]);
   }
-  else {
+  elsif ($self->_has_remote) {
     $self->add_plugins('Repository');
   }
 
