@@ -1,0 +1,35 @@
+---
+class: standard
+completed: 2026-11-09T19:42:32Z
+created: 2026-10-31T17:26:35Z
+id: 16
+priority: low
+started: 2026-11-09T18:40:19Z
+status: done
+tags:
+- build
+- pod
+title: 'Build without a GitHub/IRC remote: empty =head1 SUPPORT in every built file,
+  and ''git: svn is not a git command'' noise'
+updated: 2026-11-09T19:43:02Z
+---
+
+Seen building OCP (no_cpan = 1, @Author::GETTY 0.328) from a git archive copy with no remote: (1) the Pod::Weaver SUPPORT section (lib/Pod/Weaver/PluginBundle/Author/GETTY.pm, $support_template) renders nothing when there is neither a bugtracker_web nor an IRC resource, but the GenerateSection plugin still emits the heading, so every built .pm carries an empty =head1 SUPPORT that podchecker flags; (2) with no github remote the bundle adds [Repository] (Dist::Zilla::PluginBundle::Author::GETTY, no_github auto-set to 1), and Dist::Zilla::Plugin::Repository falls back to `git svn info` (Repository.pm line 124), which prints "git: svn is not a git command" on stderr. With a github origin remote in .git/config both are gone (verified: same tree, git remote add origin, dzil build clean, SUPPORT has Issues, podchecker OK). So OCP needs no change. Wish: omit the SUPPORT section when the template is empty (conditional section), and optionally stop the svn probe noise (e.g. pass a repository url or skip Repository when no remote). Found under OCP k365.
+
+Decision ([Repository] without a remote), mine as coordinator: [Repository] is left out when the repository has no remote at all (new lazy _has_remote from _remote_urls()). Reason: without a remote there is no URL to pass - any URL would be invented - and [Repository] can only fall back to `git svn info`, which prints "git: svn is not a git command" and adds nothing to META. With a remote everything stays as before: GitHub -> GithubMeta, Gitea/Forgejo -> GiteaMeta, any other remote -> Repository; no_github = 0 without a remote still gets GithubMeta.
+
+SUPPORT: new Pod::Weaver::Section::Author::GETTY::Support (subclass of GenerateSection, next to ...::Legal) drops the section again when its rendered text is whitespace only. With a bugtracker or IRC the output is byte-identical; only the x_Dist_Zilla config dump names the new class.
+
+Verified by hand (branch k16-k21, $CLAUDE_JOB_DIR/tmp): dzil build of a small dist in a git repo without remote -> rc 0, stderr empty (no svn), no =head1 SUPPORT, podchecker "pod syntax OK". With origin https://github.com/getty/p5-some-dist.git -> built .pm byte-identical to main (Issues line in SUPPORT), resources identical.
+
+Tests: t/weaver_support.t (no section without bugtracker/IRC, IRC-only keeps it, bugtracker as before), t/repository_remote.t (_has_remote; plugin list per remote kind), t/support_build.t (full build without remote and with github origin). Against main the no-remote asserts go red, the github-origin asserts stay green.
+
+Drift filed: k23 (only remote not origin still probes svn), k24 (cpanfile requires unused Pod::Weaver::Section::Support), k25 (empty bugtracker/repository hashes in META without remote, pre-existing).
+
+Done on branch k16-k21 (pushed, not merged): commit 0e2264c "Leave out an empty SUPPORT section and [Repository] without a remote" (lib/Dist/Zilla/PluginBundle/Author/GETTY.pm _has_remote + elsif; new lib/Pod/Weaver/Section/Author/GETTY/Support.pm; weaver bundle uses it; tests t/weaver_support.t, t/repository_remote.t, t/support_build.t; own Changes entry under {{$NEXT}}).
+
+Bundle CI on k16-k21 @ 0e2264c: run 42683567301, green on 5.36/5.38/5.40; repository_remote.t, support_build.t, weaver_support.t ran (ok, not skipped). Local: prove -lr t/ 734 tests PASS; dogfood dzil build rc 0, no warnings; actionlint 0 errors, shellcheck rc 0.
+
+Committed 0e2264c on k16-k21; CI 42683567301 green. Awaiting merge by the hub.
+
+2026-11-09 19:43 Merged to main 8432617 (Changes entry reworded to the current state), pushed; bundle installed to ~/perl5.
