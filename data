@@ -1,0 +1,74 @@
+---
+class: standard
+completed: 2026-11-09T22:01:41Z
+created: 2026-11-09T19:10:33Z
+id: 24
+priority: low
+started: 2026-11-09T20:12:08Z
+status: done
+tags:
+- cpanfile
+title: cpanfile requires Pod::Weaver::Section::Support, which lib/ never uses
+updated: 2026-11-09T22:01:41Z
+---
+
+Found under k16. cpanfile line 33 requires Pod::Weaver::Section::Support 1.014; the weaver bundle builds its SUPPORT section from GenerateSection (now Pod::Weaver::Section::Author::GETTY::Support), and git log -S finds no use of Section::Support in lib/. Check whether anything else needs it (a consumer relying on the transitive install?) and drop it if not.
+
+2026-11-09 21:07 cpanfile audit and minimum versions (branch k22-k25, uncommitted yet). Only cpanfile changed.
+
+Removed: Pod::Weaver::Section::Support 1.014 - last used as _exp('Support'), replaced by GenerateSection in 1396f5c (2026-01-11); today @GETTY/Support is Author::GETTY::Support (a GenerateSection subclass); nothing in lib/ loads or hooks it in. Consumers under [@Author::GETTY] never read their own weaver.ini (the bundle always sets config_plugin, DZP::PodWeaver 4.010), so nothing relies on the transitive install.
+Added runtime: perl 5.022; Moose (use Moose in 9 files); namespace::autoclean (Transformer, Legal, Support). Added on test: Module::Runtime (t/no_cpan_release.t), Software::License (t/binary-config.t and others). recommends PAR::Packer now 1.031.
+
+Rule: one line per CPAN distribution whose code lib/ loads or hooks in by name (plugin, bundle, weaver section/plugin, transformer, fallback_version_provider, a command in a default config string such as cpanm). The line names the addressed or main module; its version pins a release and so covers every module of that release (Git::*, Dist::Zilla core plugins, Pod::Weaver sections, Pod::Elemental elements, Run::* get no line of their own). An extra line only when a module of another, brought-along distribution needs more than that distribution guarantees (checked for RewriteVersion::Transitional and BumpVersionAfterRelease via @Git::VersionManager: not needed). Runtime lines are not repeated under on test. Core (Module::CoreList for 5.022) is not listed unless a newer version is needed. Deliberate step from the older silent rule "comes with Dist::Zilla": Moose and namespace::autoclean are now listed, following 88a07c4, which declared Path::Tiny, Config::Identity and Pithub despite their transitive origin.
+
+Workflow scripts (.github/dzil-binary/*.pl): not runtime prereqs of the bundle. They run in dzil-binary.yml under the leg's own packing perl from the checkout, never from an installed [@Author::GETTY]; build-leg.sh installs PAR::Packer there, which brings Archive::Zip. Because t/binary-scripts.t requires them, their only non-core need, Archive::Zip, stays under on test; everything else they load (JSON::PP, Digest::SHA, File::Find, File::Temp, File::Path, POSIX, Time::HiRes, Cwd, File::Basename, File::Spec) is core from 5.22.
+
+Minimum versions (every pin exists on MetaCPAN; none lowered):
+| Module | old | new | evidence |
+| perl | - | 5.022 | Dist::Zilla 6.038 Changes "now requires v5.22.0"; Pod::Weaver 4.022 Changes "bump required version to v5.22"; own syntax needs 5.14 (s///r, perlver 1.44), no <<~, no postfix deref |
+| App::cpanminus | 1.7049 | = | 1.7049 (2026-03-17); default installrelease_command "cpanm ." |
+| Config::Identity | 0.0019 | = | 0.0019 (2016-11-20) Changes "Added a generic load_check method", used by GitHubRelease |
+| Dist::Zilla | 6.040 | = | 6.040 (2026-09-26); PluginBundle::Easy, @Filter -bundle/-remove, PkgVersion finder, AutoVersion major/format, NextRelease time_zone/format, MetaResources, FakeRelease, Tester; covers NextRelease :version 5.033 |
+| Dist::Zilla::Plugin::Alien | 0.024 | = | 0.024 (2022-05-05); all 15 passed keys are attributes there |
+| Dist::Zilla::Plugin::AlienBuild | 0.33 | = | 0.33 (2025-01-13); no options |
+| Dist::Zilla::Plugin::Authority | 1.009 | = | 1.009 (2014-10-28); authority, do_munging, do_metadata; configure() :version 1.009 |
+| Dist::Zilla::Plugin::Deprecated | 0.007 | = | 0.007 (2016-11-13); no options |
+| Dist::Zilla::Plugin::Docker::API | 0.105 | = | 0.105 (2026-10-25); all subsection keys present; dockerfile works since 0.104 |
+| Dist::Zilla::Plugin::GatherAgentContext | 0.002 | = | 0.002 (2026-10-25); no options |
+| Dist::Zilla::Plugin::Git::CheckFor::CorrectBranch | 0.015 | = | Dist-Zilla-PluginBundle-Git-CheckFor-0.015 (2026-08-09); release_branch |
+| Dist::Zilla::Plugin::GitHub::CreateRelease | 0.0012 | = | 0.0012 (2026-08-11); branch, notes_from=ChangeLog; the private parts GitHubRelease overrides match (_create_release signature, org_id/repo/repo_owner/github_notes, _get_repo_owner/_get_repo_name) |
+| Dist::Zilla::Plugin::GithubMeta | 0.58 | = | 0.58 (2018-06-03); issues |
+| Dist::Zilla::Plugin::InstallRelease | 0.008 | = | 0.008 (2012-03-03); install_command |
+| Dist::Zilla::Plugin::LicenseFile | 0.002 | = | 0.002 (2026-10-25); no options |
+| Dist::Zilla::Plugin::MakeMaker::Awesome | 0.49 | = | 0.49 (2021-09-04); header, WriteMakefile_arg |
+| Dist::Zilla::Plugin::MakeMaker::SkipInstall | 1.201 | = | 1.201 (2016-08-30); no options |
+| Dist::Zilla::Plugin::MetaProvides::Package | 2.004003 | = | 2.004003 (2017-03-01); inherit_version, inherit_missing, meta_noindex |
+| Dist::Zilla::Plugin::ModuleBuildTiny | 0.020 | = | 0.020 (2025-05-02); no options |
+| Dist::Zilla::Plugin::PodWeaver | 4.010 | = | 4.010 (2023-01-12); config_plugin |
+| Dist::Zilla::Plugin::Prereqs::FromCPANfile | 0.08 | = | 0.08 (2014-12-14); carries perl, recommends and on test into META |
+| Dist::Zilla::Plugin::Repository | 0.25 | = | 0.25 (2026-04-15); git_remote (now used by k23) since 0.10 (2009-09-26 "git_remote attribute") |
+| Dist::Zilla::Plugin::Run | 0.050 | = | 0.050 (2024-06-02); run, run_if_release (Run::Role::Runner) |
+| Dist::Zilla::Plugin::TaskWeaver | 0.101629 | = | 0.101629 (2022-12-31); no options |
+| Dist::Zilla::Plugin::Test::ChangesHasContent | 0.011 | = | Dist-Zilla-Plugin-CheckChangesHasContent-0.011 (2017-11-28); no options |
+| Dist::Zilla::PluginBundle::Git | 2.052 | = | Dist-Zilla-Plugin-Git-2.052 (2025-09-28); Git::GatherDir include_dotfiles/include_untracked/exclude_*, Git::Push push_to, @Git tag_format/push_to, Git::NextVersion version_regexp |
+| Dist::Zilla::PluginBundle::Git::VersionManager | 0.007 | = | 0.007 (2018-04-11); commit_files_after_release, Plugin.key slicing, post-release commit allow_dirty_match, NextRelease.format; its own prereqs cover RewriteVersion::Transitional 0.004 and BumpVersionAfterRelease 0.016 |
+| Moose | - | new, unversioned | only old features (Maybe[]/ArrayRef[], init_arg, around, extends/with, make_immutable), all before 0.92, Dist::Zilla's floor |
+| namespace::autoclean | - | new, unversioned | plain use namespace::autoclean |
+| Path::Tiny | - | = | path, absolute, child, mkpath, is_file, slurp_utf8 since 0.0xx; Dist::Zilla floor 0.052 |
+| Pithub | 0.01043 | = | 0.01043 (2025-05-31); Releases since 0.01022, ::Assets since 0.01023 |
+| Pod::Elemental | 0.103006 | = | 0.103006 (2022-12-31); Transformer role, Element::Nested, Pod5::Ordinary/Command |
+| Pod::Elemental::Transformer::List | 0.102001 | = | 0.102001 (2022-12-31); transformer List |
+| Pod::Weaver | 4.022 | = | 4.022 (2026-09-13); Config::Assembler, @CorePrep, -SingleEncoding, Name, Version, Region, Generic, Leftovers, Authors, Legal, -Transformer; GenerateSection part of Pod::Weaver since 4.016 |
+| Pod::Weaver::Section::Support | 1.014 | removed | unused, see above |
+| PAR::Packer (recommends) | - | 1.031 | PAR-Packer-1.031 (2016-04-10) Changes "pp now accepts -M Foo::, -M Foo:* and -M Foo:**"; Binary.pm passes binary_modules as -M, the POD example uses Other::* |
+| Archive::Zip (test) | - | = | new/read/members/memberNames/AZ_OK are old; no evidence for a later floor |
+| Module::Runtime (test) | - | new, unversioned | use_module only |
+| Software::License (test) | - | new, unversioned | Perl_5->new({holder,year})->license only |
+| Test::More (test) | 1.302226 | = | 1.302226 (2026-10-19); kept (never lowered) |
+
+Checks: prove -lr t/ 734 PASS; dogfood dzil build clean, META.json prereqs == cpanfile, Makefile.PL MIN_PERL_VERSION 5.022; dzil listdeps --missing / --author --missing / authordeps --missing empty.
+New cards from this audit: k29 (run_if_*/run_no_* silently dropped), k30 (binary_modules POD vs pp ::* semantics), k31 (core skill text on the on-test block).
+
+2026-11-09 21:52 Commit 9b37c97 'Declare perl 5.22 and what the bundle loads' on branch k22-k25 (pushed, not merged); the body carries the reasons and the workflow-script decision. Changes: new entry on the prerequisites. New t/cpanfile_coverage.t (232 asserts) checks the cpanfile against configure() over 25 option paths, the weaver bundle, the :version pins and a use/require/extends/with scan, in both directions; it leaves out the t/author-*.t and t/release-*.t that dzil generates in the build (their deps are develop-phase, never on test) and is green in the tree and in the built dist. Counter-check against main: red for Pod::Weaver::Section::Support and the new lines; a planted unknown module turns it red. Bundle CI 42705661878 on k22-k25 tip 9b37c97: green on 5.36/5.38/5.40 (38 files, 1066 tests each; the new/extended tests ran; only skip release-changes_has_content.t without RELEASE_TESTING, as always). Ready for review.
+
+2026-11-09 22:01 Merged to main (7537e40..4fb338d), pushed; bundle installed to ~/perl5.
