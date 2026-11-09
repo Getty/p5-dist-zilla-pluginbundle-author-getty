@@ -24,6 +24,24 @@ sub _repo {
 }
 
 # The cwd-dependent lazy attributes and configure() are forced inside $dir.
+# Like _repo, but the remotes are written in the given order (name => url pairs).
+sub _repo_ordered {
+  my ($dir, @pairs) = @_;
+  system('git', 'init', '-q', $dir) == 0 or die "git init $dir failed";
+  open my $fh, '>>', "$dir/.git/config" or die "open: $!";
+  while (my ($name, $url) = splice @pairs, 0, 2) {
+    print $fh "[remote \"$name\"]\n\turl = $url\n\tfetch = +refs/heads/*:refs/remotes/$name/*\n";
+  }
+  close $fh;
+  return $dir;
+}
+
+# The [Repository] entries of the plugin list: [name, class, config] each.
+sub _repository_entries {
+  my ($r) = @_;
+  return grep { $_->[1] =~ /(?:\A|::)Repository\z/ } @{ $r->{plugins} };
+}
+
 sub _in_dir {
   my ($dir, $payload) = @_;
   my $orig = getcwd();
@@ -33,10 +51,12 @@ sub _in_dir {
     payload => $payload // {},
   );
   my $has_remote = $bundle->_has_remote ? 1 : 0;
+  # forced here, while the cwd is the fabricated repository (can: a missing attribute fails the _remote_name tests, not the file)
+  my $remote_name = $bundle->can('_remote_name') ? $bundle->_remote_name : undef;
   $bundle->configure;
   chdir $orig or die "chdir back: $!";
   my %seen = map { $_->[1] => $_->[2] } @{ $bundle->plugins };
-  return { has_remote => $has_remote, classes => \%seen };
+  return { has_remote => $has_remote, remote_name => $remote_name, classes => \%seen, plugins => $bundle->plugins };
 }
 
 
@@ -99,6 +119,57 @@ subtest 'github origin -> GithubMeta as before' => sub {
 subtest 'codeberg origin -> GiteaMeta as before' => sub {
   my $r = _in_dir(_repo(tempdir(CLEANUP => 1), origin => 'https://codeberg.org/getty/p5-some-dist.git'));
   is _repo_plugins($r), 'GiteaMeta', 'GiteaMeta only';
+};
+
+subtest '_remote_name' => sub {
+  my $r = _in_dir(_repo(tempdir(CLEANUP => 1), origin => 'git@github.com:getty/some-dist.git'));
+  is $r->{remote_name}, 'origin', 'an origin: origin';
+
+  $r = _in_dir(_repo_ordered(tempdir(CLEANUP => 1),
+    zeta => 'https://example.com/a.git', origin => 'https://example.com/b.git', alpha => 'https://example.com/c.git'));
+  is $r->{remote_name}, 'origin', 'origin wins over remotes that come first in the config';
+
+  $r = _in_dir(_repo_ordered(tempdir(CLEANUP => 1),
+    zeta => 'https://example.com/a.git', alpha => 'https://example.com/c.git'));
+  is $r->{remote_name}, 'zeta', 'no origin: the first remote of the config (not the alphabetically first)';
+
+  $r = _in_dir(_repo(tempdir(CLEANUP => 1), upstream => 'https://gitlab.com/getty/some-dist.git'));
+  is $r->{remote_name}, 'upstream', 'only an upstream: upstream';
+
+  $r = _in_dir(_repo(tempdir(CLEANUP => 1)));
+  is $r->{remote_name}, undef, 'no remote: undef';
+
+  $r = _in_dir(tempdir(CLEANUP => 1));
+  is $r->{remote_name}, undef, 'no .git at all: undef';
+};
+
+subtest '[Repository] is pointed at the remote it can read' => sub {
+  my $r = _in_dir(_repo(tempdir(CLEANUP => 1), upstream => 'https://gitlab.com/getty/some-dist.git'));
+  my @e = _repository_entries($r);
+  is scalar(@e), 1, 'only an upstream (gitlab): one [Repository]';
+  is_deeply $e[0][2], { git_remote => 'upstream' }, '... with git_remote = upstream';
+
+  $r = _in_dir(_repo_ordered(tempdir(CLEANUP => 1),
+    zeta => 'https://example.com/a.git', alpha => 'https://example.com/c.git'));
+  @e = _repository_entries($r);
+  is_deeply $e[0][2], { git_remote => 'zeta' }, 'several remotes, no origin: git_remote = the first one';
+
+  $r = _in_dir(_repo(tempdir(CLEANUP => 1), origin => 'git@gitlab.com:getty/some-dist.git'));
+  @e = _repository_entries($r);
+  is scalar(@e), 1, 'a gitlab origin: one [Repository]';
+  is_deeply $e[0][2], {}, '... without any payload, exactly as before (it reads origin by default)';
+
+  $r = _in_dir(_repo_ordered(tempdir(CLEANUP => 1),
+    upstream => 'https://example.com/a.git', origin => 'https://gitlab.com/getty/some-dist.git'));
+  @e = _repository_entries($r);
+  is_deeply $e[0][2], {}, 'origin and upstream: origin wins, no payload';
+
+  $r = _in_dir(_repo(tempdir(CLEANUP => 1), origin => 'git@github.com:getty/some-dist.git'), { no_github => 1 });
+  @e = _repository_entries($r);
+  is_deeply $e[0][2], {}, 'github origin with no_github = 1: Repository without payload';
+
+  $r = _in_dir(_repo(tempdir(CLEANUP => 1)));
+  is scalar(_repository_entries($r)), 0, 'no remote: no [Repository] at all';
 };
 
 done_testing;

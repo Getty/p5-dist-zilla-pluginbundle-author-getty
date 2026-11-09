@@ -264,7 +264,8 @@ remote pointing at a Gitea/Forgejo host gets proper C<repository>/
 C<bugtracker>/C<homepage> resources via
 L<Dist::Zilla::Plugin::Author::GETTY::GiteaMeta> (the Gitea/Forgejo counterpart
 of L<Dist::Zilla::Plugin::GithubMeta>); any other remote falls back to the
-generic L<Dist::Zilla::Plugin::Repository>. A repository without any remote
+generic L<Dist::Zilla::Plugin::Repository>, which reads C<origin>, or the first
+remote when there is no C<origin>. A repository without any remote
 gets none of them: there is no URL to report. The known Gitea hosts
 (C<codeberg.org> and the author's own instance) are detected automatically;
 for any other self-hosted Gitea/Forgejo instance set L</gitea>. Purely
@@ -848,6 +849,18 @@ has _remote_host => (
     my ($remote) = _remote_urls() or return undef;
     my ($host) = $remote->[1] =~ m{(?: ^\w+:// (?:[^/\@]+\@)? | ^[^/\@]+\@ ) ([^/:]+)}x;
     return $host;
+  },
+);
+
+# Name of the same remote: origin, or the first remote if there is no origin.
+# Undef when there is no remote.
+has _remote_name => (
+  is      => 'ro',
+  isa     => 'Maybe[Str]',
+  lazy    => 1,
+  default => sub {
+    my ($remote) = _remote_urls() or return undef;
+    return $remote->[0];
   },
 );
 
@@ -1505,7 +1518,13 @@ sub configure {
     } ]);
   }
   elsif ($self->_has_remote) {
-    $self->add_plugins('Repository');
+    # Repository reads only remote.<git_remote>.url (default origin) and
+    # without it falls back to `git svn info` as well, so a repository with no
+    # origin points it at its first remote. With origin nothing is passed.
+    my $remote = $self->_remote_name;
+    $self->add_plugins(defined $remote && $remote ne 'origin'
+      ? [ 'Repository' => { git_remote => $remote } ]
+      : 'Repository');
   }
 
   # Add IRC metadata if configured

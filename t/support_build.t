@@ -5,6 +5,7 @@ use Test::More;
 use File::Temp qw(tempdir);
 use IPC::Cmd qw(can_run);
 use Path::Tiny;
+use JSON::PP ();
 
 # A real build of a small dist with [@Author::GETTY] in a git repository
 # (fabricated .git/config, never a network), once without any remote and once
@@ -12,7 +13,9 @@ use Path::Tiny;
 #  - no remote: no empty =head1 SUPPORT in the built files, podchecker clean,
 #    and no `git svn info` probe by [Repository] on STDERR;
 #  - github origin: the SUPPORT section with its Issues line, and the
-#    repository resources GithubMeta reports.
+#    repository resources GithubMeta reports;
+#  - only a gitlab remote named upstream: [Repository] is pointed at it, so the
+#    dist gets its repository resource and no `git svn info` noise.
 
 plan skip_all => "Dist::Zilla::Tester not available"
   unless eval { require Dist::Zilla::Tester; require Pod::Checker; 1 };
@@ -42,7 +45,8 @@ POD
 
 # Builds the dist; returns ($tzil, $stderr, the built root).
 sub build {
-  my ($origin) = @_;
+  my ($origin, $remote_name) = @_;
+  $remote_name //= 'origin';
   my $tempdir = tempdir(CLEANUP => 1);
   my $root    = path($tempdir, 'dist');
   $root->child('lib')->mkpath;
@@ -63,7 +67,7 @@ INI
     [qw(init -q)],
     [qw(add -A)],
     ['-c', 'user.email=test@test.de', '-c', 'user.name=Test', 'commit', '-q', '-m', 'init'],
-    ($origin ? [qw(remote add origin), $origin] : ()),
+    ($origin ? ['remote', 'add', $remote_name, $origin] : ()),
   );
   system('git', '-C', "$root", @$_) == 0 or die "git @$_ failed in $root: $?" for @git;
 
@@ -134,6 +138,20 @@ subtest 'build with a github origin' => sub {
     web  => 'https://github.com/getty/p5-some-dist',
   }, 'repository resource as GithubMeta reports it');
   unlike($stderr, qr/svn/, 'no svn noise either');
+};
+
+subtest 'build with only a gitlab remote named upstream' => sub {
+  my ($tzil, $stderr, $built) = build('https://gitlab.com/getty/p5-some-dist.git', 'upstream');
+  unlike($stderr, qr/svn/, 'no `git svn info` probe on STDERR');
+  my ($repo) = grep { ref $_ && $_->isa('Dist::Zilla::Plugin::Repository') } @{ $tzil->plugins };
+  ok($repo, 'sanity: the build used [Repository]');
+  is($repo && $repo->git_remote, 'upstream', '[Repository] reads the upstream remote');
+  my $res = $tzil->distmeta->{resources};
+  is($res->{repository}{type}, 'git', 'resources.repository.type');
+  is($res->{repository}{url}, 'https://gitlab.com/getty/p5-some-dist.git', 'resources.repository.url');
+  ok(length($res->{repository}{web} // ''), 'resources.repository.web is set') or diag explain $res;
+  my $json = JSON::PP->new->decode($built->child('META.json')->slurp_raw);
+  is($json->{resources}{repository}{url}, 'https://gitlab.com/getty/p5-some-dist.git', 'META.json carries the repository url');
 };
 
 done_testing;
