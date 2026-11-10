@@ -193,7 +193,40 @@ C<dzil release>
 
 =back
 
-All of these keys can be given more than once.
+All of these keys can be given more than once. C<dzil release> sets
+C<DZIL_RELEASING> before it builds the release, so in C<before_release>,
+C<release> and C<after_release> a C<run_if_release_E<lt>phaseE<gt>> command
+always runs and a C<run_no_release_E<lt>phaseE<gt>> command never does.
+
+The commands take the placeholders of L<Dist::Zilla::Plugin::Run>, among them
+C<%n> (distribution name), C<%v> (version), C<%d> (build directory, not in
+C<before_build>) and C<%a> (archive, in C<before_release>, C<release> and
+C<after_release>). C<%s> is positional: each C<%s> takes the next value of its
+phase, and is empty once they run out:
+
+=over 4
+
+=item *
+
+C<before_build>: the version
+
+=item *
+
+C<after_build>: the build directory, then the version
+
+=item *
+
+C<before_release> and C<release>: the archive
+
+=item *
+
+C<after_release>: the archive, then the version
+
+=item *
+
+C<test>: none
+
+=back
 
 You can also use add up configuration for L<Dist::Zilla::Plugin::Git::GatherDir>,
 excluding I<root> or I<prefix>:

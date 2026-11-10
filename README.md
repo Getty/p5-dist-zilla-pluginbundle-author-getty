@@ -149,16 +149,26 @@ Execute scripts at various points in the build/release cycle. All accept multipl
 | `run_after_release` | Run after releasing |
 | `run_test` | Run during testing |
 
-Each run option also has conditional variants:
-- `run_if_trial_*` - Only run for trial releases
-- `run_no_trial_*` - Only run for non-trial releases
-- `run_if_release_*` - Only run during release testing
-- `run_no_release_*` - Only run during non-release testing
+Each run option also has conditional variants, in every phase:
+- `run_if_trial_*` - Only run for a trial build or release
+- `run_no_trial_*` - Only run for a build or release that is not a trial
+- `run_if_release_*` - Only run within `dzil release` (`DZIL_RELEASING` is set)
+- `run_no_release_*` - Only run outside of `dzil release` (`dzil build`, `dzil test`, ...)
+
+`dzil release` sets `DZIL_RELEASING` before it builds the release, so in
+`before_release`, `release` and `after_release` a `run_if_release_*` command
+always runs and a `run_no_release_*` command never does.
 
 **Placeholders:**
-- `%s` - Distribution directory
-- `%d` - Distribution directory
-- `%a` - Archive filename
+- `%s` - Positional: each `%s` takes the next value of its phase, and is empty
+  once they run out:
+  - `before_build`: the version
+  - `after_build`: the build directory, then the version
+  - `before_release`, `release`: the archive
+  - `after_release`: the archive, then the version
+  - `test`: none
+- `%d` - Build directory (not in `before_build`)
+- `%a` - Archive filename (`before_release`, `release`, `after_release`)
 - `%n` - Distribution name
 - `%v` - Version
 
