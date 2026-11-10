@@ -1,0 +1,33 @@
+---
+claimed_at: 2026-11-10T04:09:03Z
+claimed_by: p5-dist-zilla-pluginbundle-author-getty
+class: standard
+completed: 2026-11-10T04:09:03Z
+created: 2026-11-10T02:13:54Z
+id: 32
+priority: high
+started: 2026-11-10T04:09:03Z
+status: done
+tags:
+- binary
+- ci
+title: 'binary_verify and binary_smoke: name the dist''s dependencies to the hook
+  (CI leg and local check alike)'
+updated: 2026-11-10T04:09:03Z
+---
+
+Found by mcp-hub, the second consumer. In .github/dzil-binary/build-leg.sh verify() calls leg_env without lib, so PERL5LIB, PERL_LOCAL_LIB_ROOT, PERL_MB_OPT and PERL_MM_OPT are unset and the packing perl sees nothing from the leg's local lib; the local check in Binary.pm after_build runs the same hook with the caller's environment, PERL5LIB included. mcp-hub's verify compares each case against 'perl -Ilib bin/mcp-hub' and recomputes the packed module set with scripts/loaded-modules.pl; both need a perl that loads the dist's dependencies and die in the CI leg with Can't locate Mojo/Base.pm. mcp-wiki's verify needs only core modules.
+
+Shape: the hooks get DZIL_BINARY_PERL5LIB, the PERL5LIB value under which the packing perl loads the dist's dependencies; PERL5LIB itself stays out of the hook's environment, so the binary under test never sees it. The same contract in the CI leg and in the local check. POD and the leg contract say so. mcp-wiki's scripts stay green.
+
+2026-11-10 02:16 Shape after the session's objection: DZIL_BINARY_PERL5LIB exists in the verify hook only (CI leg and local check alike, PERL5LIB absent there). The CI smoke runs in its own job on a clean machine without the packing perl or the leg's lib, so smoke gets neither variable; the local check takes PERL5LIB out of the smoke environment too.
+
+2026-11-10 02:49 Implemented (tree uncommitted): build-leg.sh verify() exports DZIL_BINARY_PERL5LIB=$LOCAL/lib/perl5 after leg_env (PERL5LIB and local::lib vars stay unset); Binary.pm _run_hook(cmd, arg, perl5lib) drops PERL5LIB and DZIL_BINARY_PERL5LIB via delete local and sets the latter only when given (both Unix and Win32 branches); after_build passes the caller's PERL5LIB (empty when unset) to verify, nothing to smoke. POD of binary_verify/binary_smoke, the Binaries overview, Binary.pm verify/smoke and the build-leg.sh header say so. Repro: HEAD build-leg.sh verify with a set -u hook dies 'DZIL_BINARY_PERL5LIB: parameter not set'; with the change the hook loads a module from the fake local lib via PERL5LIB=$DZIL_BINARY_PERL5LIB perl. prove -lr t/ 38 files/1085 tests green, no skips; actionlint + shellcheck clean; dzil build clean. Tests for the test-writer pending.
+
+2026-11-10 02:56 Re-check after the last comment/POD wording edits: build-leg.sh leg probe, bash -n, prove t/binary-win32.t t/compile.t green. Not run after those edits, reason: loadguard hook refuses docker run / dzil build (4/4 heavy slots held by other sessions): shellcheck, actionlint, dzil build. They were clean on the tree before the wording edits. Backlog-Karte low: with PERL5LIB removed, perl falls back to PERLLIB, and PERL5OPT can carry -I; neither the leg (leg_env) nor _run_hook drops them, so a caller's PERLLIB/PERL5OPT would still reach the binary under test.
+
+2026-11-10 03:11 Tests written (untracked->staged, not committed): t/binary-win32.t (_run_hook X/''/undef in linux+MSWin32; after_build verify/smoke env in both branches, caller PERL5LIB set/unset, stale DZIL_BINARY_PERL5LIB, %ENV restored), t/binary-scripts.t (first build-leg.sh verify harness, 9 tests). prove -lr -j4 t/ 38 files/1116 tests green, no skips. Against HEAD lib/script: 10 tests red in win32.t, 3 red in leg harness. dzil build not run, reason: loadguard.
+
+2026-11-10 03:14 Committed as 2549f83 on k26-k31 (not pushed, not moved).
+
+2026-11-10 04:01 Done: 2549f83 (pushed on k26-k31). Contract: DZIL_BINARY_PERL5LIB only for verify (leg: $HOME/dzil-binary/local/lib/perl5; local: caller's PERL5LIB, empty when unset); PERL5LIB never in a hook env; smoke gets neither. CI run 42752629074 on k26-k31 @ ace48ca green on 5.36/5.38/5.40 (40 files, 1178 tests; only release-changes_has_content.t skipped). Local: prove -lr 38 files/1169 tests PASS, dzil build clean, actionlint+shellcheck exit 0. Open, not filed: PERLLIB and PERL5OPT (-I) are not stripped from the hook env.
