@@ -17,6 +17,10 @@
     is no origin. A repository without a remote builds without one and
     without empty bugtracker or repository entries in META.json.
 
+  - The remote detection and GiteaMeta run git directly, without a shell,
+    so GitHub, Gitea and Forgejo remotes are also recognised on native
+    Windows, and a remote name reaches git as it is.
+
   - The prerequisites name what the bundle loads: perl 5.22, the minimum of
     Dist::Zilla and Pod::Weaver, Moose and namespace::autoclean. PAR::Packer
     1.031 is recommended for the local pp check; Module::Runtime and

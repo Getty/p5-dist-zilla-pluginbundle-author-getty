@@ -3,6 +3,7 @@ package Dist::Zilla::PluginBundle::Author::GETTY;
 our $VERSION = '0.328';
 use Moose;
 use Dist::Zilla;
+use File::Spec;
 with 'Dist::Zilla::Role::PluginBundle::Easy';
 
 # Defaults published for any [@Author::GETTY::Docker / ...] subsections that
@@ -871,13 +872,28 @@ has no_github_release => (
 # Empty when there is no repository, no git, or no remote.
 sub _remote_urls {
   my @remotes;
-  my $out = `git config --get-regexp '^remote\\..*\\.url\$' 2>/dev/null`;
-  return () if $? != 0 or !defined $out;
+  my $out = _git_output('config', '--get-regexp', '^remote\..*\.url$');
+  return () unless defined $out;
   for my $line (split /\n/, $out) {
     my ($key, $url) = $line =~ m{^remote\.(.+)\.url\s+(\S+)} or next;
     push @remotes, [ $key, $url ];
   }
   return ( (grep { $_->[0] eq 'origin' } @remotes), (grep { $_->[0] ne 'origin' } @remotes) );
+}
+
+# Output of `git ARGS` in the cwd; undef when git cannot be started or exits
+# non-zero. git runs without a shell: cmd.exe, the shell of backticks on
+# Windows, knows neither ' quoting nor 2>/dev/null. Its STDERR goes to the null
+# device. Author::GETTY::GiteaMeta has the same helper.
+sub _git_output {
+  my (@args) = @_;
+  open my $stderr, '>&', \*STDERR or die "cannot dup STDERR: $!\n";
+  my $fh;
+  my $started = open(STDERR, '>', File::Spec->devnull) && open($fh, '-|', 'git', @args);
+  open STDERR, '>&', $stderr or die "cannot restore STDERR: $!\n";
+  return undef unless $started;
+  my $out = do { local $/; <$fh> };
+  return close($fh) ? $out : undef;
 }
 
 # True if any remote URL points at github.com. Used to auto-disable the

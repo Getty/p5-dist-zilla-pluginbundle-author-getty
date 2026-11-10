@@ -1,6 +1,7 @@
 package Dist::Zilla::Plugin::Author::GETTY::GiteaMeta;
 # ABSTRACT: Add Gitea/Forgejo (incl. Codeberg) repository metadata to META.{json,yml}
 use Moose;
+use File::Spec;
 with 'Dist::Zilla::Role::MetaProvider';
 
 our $VERSION = '0.328';
@@ -105,10 +106,24 @@ has _remote_info => (
 
 sub _build_remote_info {
   my ($self) = @_;
-  my $remote = $self->remote;
-  chomp(my $url = `git config --get remote.$remote.url 2>/dev/null` // '');
+  chomp(my $url = _git_output('config', '--get', 'remote.' . $self->remote . '.url') // '');
   return undef unless length $url;
   return $self->_parse_remote_url($url);
+}
+
+# Output of `git ARGS` in the cwd; undef when git cannot be started or exits
+# non-zero. git runs without a shell, so the remote name reaches it as it is,
+# also on Windows (cmd.exe knows no 2>/dev/null). Its STDERR goes to the null
+# device. The same helper as in Dist::Zilla::PluginBundle::Author::GETTY.
+sub _git_output {
+  my (@args) = @_;
+  open my $stderr, '>&', \*STDERR or die "cannot dup STDERR: $!\n";
+  my $fh;
+  my $started = open(STDERR, '>', File::Spec->devnull) && open($fh, '-|', 'git', @args);
+  open STDERR, '>&', $stderr or die "cannot restore STDERR: $!\n";
+  return undef unless $started;
+  my $out = do { local $/; <$fh> };
+  return close($fh) ? $out : undef;
 }
 
 # Parse a git remote URL into { host => ..., slug => 'owner/repo' }, or undef.
