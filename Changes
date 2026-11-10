@@ -52,7 +52,8 @@
 
   - A dist with "binary" keys now packs each declared binary with pp during
     "dzil build" and runs its verify and smoke commands on the result, so a
-    broken binary already fails the local build. "dzil
+    broken binary already fails the local build. When pp cannot be started,
+    the build names the reason. "dzil
     release" requires .github/workflows/binaries.yml calling the shared
     dzil-binary.yml and dies without it. The dzil-test action sets
     DZIL_BINARY_SKIP=1, so CI builds skip the pp step. On native Windows the

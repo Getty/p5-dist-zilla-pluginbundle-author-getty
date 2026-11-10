@@ -361,6 +361,23 @@ block 'after_build MSWin32' => sub {
   eval { $fail->after_build({ build_root => "$root" }) };
   is $@, "FATAL: binary_smoke failed for foo: exit 1\n", 'after_build (MSWin32): a failing binary_smoke names binary and command';
 
+  # pp found, but $^X cannot be started (system returns -1)
+  {
+    my $enoent = do { local $! = 2; "$!" };
+    local $^X = "$tmp/no/such/perl";
+    local $SIG{__WARN__} = sub { };   # perl's "Can't exec ..."
+    eval { plugin()->after_build({ build_root => "$root" }) };
+    is $@, "FATAL: cannot run pp for binary foo: $enoent\n",
+      'after_build (MSWin32): an unstartable $^X dies with the reason from $!, no exit code';
+  }
+
+  # pp runs and fails
+  {
+    local $ENV{STUB_EXIT} = 4;
+    eval { plugin()->after_build({ build_root => "$root" }) };
+    is $@, "FATAL: pp failed for binary foo (exit 4)\n", 'after_build (MSWin32): a failing pp names binary and exit code';
+  }
+
   # nothing found
   local $ENV{PATH} = "$tmp/nowhere";
   eval { plugin()->after_build({ build_root => "$root" }) };

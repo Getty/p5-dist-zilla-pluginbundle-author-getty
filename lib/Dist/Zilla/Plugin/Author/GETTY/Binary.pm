@@ -205,7 +205,10 @@ sub after_build {
       ( map { ('-M', $_) } @{ $self->modules } ), @extra, "$build/" . $self->script );
     $self->log("packing $name");
     local $ENV{PAR_VERBATIM} = 1;
-    _run_pp(@cmd) == 0 or $self->log_fatal("pp failed for binary $name (exit " . ($? >> 8) . ")");
+    my $rc  = _run_pp(@cmd);
+    my $why = "$!";   # pp did not start ($? == -1): $! read before other code clobbers it
+    $self->log_fatal("cannot run pp for binary $name: $why") if $rc == -1;
+    $rc == 0 or $self->log_fatal("pp failed for binary $name (exit " . ($? >> 8) . ")");
 
     for my $hook (qw( verify smoke )) {
       my $cmd = $self->$hook;

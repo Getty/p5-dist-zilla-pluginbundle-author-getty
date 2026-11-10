@@ -242,6 +242,38 @@ packs_scenario('plain');
     'missing_pp_dies_with_hint: names PAR::Packer and DZIL_BINARY_SKIP=1';
 }
 
+# pp is found but cannot be started (system returns -1): the build dies with the
+# reason from $!, not with a bogus exit code. The interpreter of its #! line does
+# not exist (a file without #! would be run through sh instead).
+{
+  my $badbin = $tools->child('badpp');
+  $badbin->mkpath;
+  $badbin->child('pp')->spew("#!/nonexistent/interpreter\n");
+  chmod 0755, $badbin->child('pp');
+  my @warn;
+  my ($tzil, $err) = do {
+    local $SIG{__WARN__} = sub { push @warn, @_ };   # perl's "Can't exec ..."
+    build_dist($BUNDLE . "binary = foo\n", path => "$badbin:$nopp");
+  };
+  my $enoent = do { local $! = 2; "$!" };
+  like $err // '', qr/cannot run pp for binary foo: \Q$enoent\E/,
+    'unstartable_pp: the build dies with "cannot run pp for binary foo: <reason from $!>"';
+  unlike $err // '', qr/exit|pp failed/, 'unstartable_pp: no exit code in the message';
+  unlike $err // '', qr/\d{6,}/, 'unstartable_pp: no bogus exit code number';
+}
+
+# pp runs and fails: the exit code is named
+{
+  my $badbin = $tools->child('failpp');
+  $badbin->mkpath;
+  $badbin->child('pp')->spew("#!/bin/sh\nexit 4\n");
+  chmod 0755, $badbin->child('pp');
+  my ($tzil, $err) = build_dist($BUNDLE . "binary = foo\n", path => "$badbin:$nopp");
+  like $err // '', qr/pp failed for binary foo \(exit 4\)/,
+    'failing_pp: the build dies with "pp failed for binary foo (exit 4)"';
+  unlike $err // '', qr/cannot run pp/, 'failing_pp: ... and not as an unstartable pp';
+}
+
 # release: the caller workflow, read from the zilla root
 my $USES = "uses: $WF_REPO/.github/workflows/dzil-binary.yml";
 
