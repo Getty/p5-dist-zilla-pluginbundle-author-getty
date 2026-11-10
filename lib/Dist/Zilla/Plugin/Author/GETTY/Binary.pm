@@ -100,6 +100,14 @@ sub _pp_args_lines {
   return grep { length } map { s/\r\z//r } split /\n/, $output;
 }
 
+# The -M rule, the same as in the binary workflow's pp-args.pl: each module as
+# -M, a trailing ::* as ::**, every module below at any depth (pp takes one
+# level for ::*), the namespace require-gate.pl checks for Glob::*.
+sub _pp_module_args {
+  my (@modules) = @_;
+  return map { ('-M', s/::\*\z/::**/r) } @modules;
+}
+
 # Win32: -x is true there only for .exe, .bat, .cmd and .com (win32.c,
 # win32_stat_low), never for pp, a Perl script without an extension next to its
 # pp.bat; _run_pp starts it with $^X.
@@ -207,7 +215,7 @@ sub after_build {
       @extra = _pp_args_lines($self->_pp_args_output($self->pp_args));
     }
     my @cmd = ( $pp, '-o', $out, '-I', "$build/lib",
-      ( map { ('-M', $_) } @{ $self->modules } ), @extra, "$build/" . $self->script );
+      _pp_module_args(@{ $self->modules }), @extra, "$build/" . $self->script );
     $self->log("packing $name");
     local $ENV{PAR_VERBATIM} = 1;
     my $rc  = _run_pp(@cmd);
@@ -276,7 +284,9 @@ has to be part of the distribution.
 
 =head2 modules
 
-Modules packed in besides what C<pp> finds, each as C<-M>. Repeatable.
+Modules packed in besides what C<pp> finds, each as C<-M>. Repeatable. A
+trailing C<::*> goes to C<pp> as C<::**>: every module below, at any depth,
+without the module itself.
 
 =head2 require
 

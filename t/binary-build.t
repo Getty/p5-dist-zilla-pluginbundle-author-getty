@@ -218,6 +218,16 @@ packs_scenario('plain');
   is scalar(@$argv), 7, 'pp_args_line_rule: exactly -o P -I L -a X SCRIPT (7 arguments, no -M without modules)';
 }
 
+# k30: a trailing ::* in binary_modules reaches pp as ::**, in order, both values kept
+{
+  my ($tzil, $err, $log, $build) = build_dist(
+    $BUNDLE . "binary = foo\nbinary_modules = A::*\nbinary_modules = B\nbinary_modules = C::D::*\n");
+  is $err, undef, 'glob_modules: builds' or diag $err;
+  is_deeply lines($log->child('pp.argv')),
+    ['-o', "$build-binaries/foo", '-I', "$build/lib", '-M', 'A::**', '-M', 'B', '-M', 'C::D::**', "$build/bin/foo"],
+    'glob_modules: A::* -> -M A::**, B unchanged, C::D::* -> -M C::D::**, order kept';
+}
+
 # no pp_args at all: nothing is added between the options and the script
 {
   my ($tzil, $err, $log, $build) = build_dist($BUNDLE . "binary = foo\n");

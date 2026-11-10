@@ -137,6 +137,17 @@ my $BUNDLE = "[\@Author::GETTY]\nno_github = 0\nno_github_release = 0\n";
   is_deeply $x->{binaries}{foo}{require}, [qw(R1 R2)], 'multivalue: two binary_require lines both survive';
 }
 
+# k30: META keeps the glob as the user wrote it; only the pp argv translates it
+{
+  my ($tzil, $err) = build_dist(
+    "$BUNDLE" . "binary = foo\nbinary_modules = Foo::*\nbinary_modules = Baz\n",
+    scripts => ['bin/foo']);
+  is $err, undef, 'meta_glob: builds' or diag $err;
+  my $x = $tzil && x_binaries($tzil) || {};
+  is_deeply $x->{binaries}{foo}{modules}, [ 'Foo::*', 'Baz' ],
+    'meta_glob: x_binaries modules keeps Foo::* (not Foo::**)';
+}
+
 # subsection_overrides
 {
   my ($tzil, $err) = build_dist(

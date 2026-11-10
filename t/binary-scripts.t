@@ -266,6 +266,51 @@ sub pp_argv {
   is($raw, '', 'argv_pp_args_fails: no partial argv on stdout');
 }
 
+# k30: a trailing ::* goes to pp as ::** (every module below at any depth; pp
+# takes one level for ::*). The -M rule lives twice, here and in the bundle's
+# local check; both helpers get the same table.
+my @MODULE_ARGS = (
+  [ ['Foo::*']              => [qw( -M Foo::** )],                   'one level glob' ],
+  [ ['A::B::*']             => [qw( -M A::B::** )],                  'deeper glob' ],
+  [ ['Foo']                 => [qw( -M Foo )],                       'plain module' ],
+  [ ['Foo::Bar']            => [qw( -M Foo::Bar )],                  'nested plain module' ],
+  [ ['Foo::**']             => [qw( -M Foo::** )],                   'already ::** stays, not ::***' ],
+  [ ['Foo::']               => [qw( -M Foo:: )],                     'trailing :: stays' ],
+  [ [qw( Z::* Baz A::* B )] => [qw( -M Z::** -M Baz -M A::** -M B )], 'order kept, globs mixed with plain' ],
+  [ []                      => [],                                   'empty list' ],
+);
+{
+  my $loaded = eval { require Dist::Zilla::Plugin::Author::GETTY::Binary; 1 };
+  for my $row (@MODULE_ARGS) {
+    my ($in, $want, $label) = @$row;
+    my $pp = DzilBinary::PPArgs->can('pp_module_args');
+    ok($pp, "pp_module_args exists: $label");
+    $pp ||= sub { '<missing>' };
+    is_deeply([ $pp->(@$in) ], $want, "pp_module_args: $label");
+  SKIP: {
+      skip "Binary plugin not loadable: $@", 3 unless $loaded;
+      my $lp = Dist::Zilla::Plugin::Author::GETTY::Binary->can('_pp_module_args');
+      ok($lp, "_pp_module_args exists: $label");
+      $lp ||= sub { '<missing>' };
+      is_deeply([ $lp->(@$in) ], $want, "_pp_module_args: $label");
+      is_deeply([ $lp->(@$in) ], [ $pp->(@$in) ], "module_args_parity: $label");
+    }
+  }
+}
+
+{ # argv_glob_modules: META modules [Foo::*, Baz]
+  my $d = tempdir(CLEANUP => 1);
+  my $bins = { 'mcp-x' => { script => 'bin/mcp-x', modules => [ 'Foo::*', 'Baz' ], require => [] } };
+  my ($rc, $argv, $raw, $err) = pp_argv({ platforms => [@ALL], binaries => $bins }, 'mcp-x', '/o/out', $d);
+  is($rc, 0, 'argv_glob_modules: exit 0') or diag $err;
+  is_deeply($argv, [qw( -o /o/out -I lib -M Foo::** -M Baz bin/mcp-x )],
+    'argv_glob_modules: Foo::* reaches pp as -M Foo::**, Baz unchanged');
+  is($raw, join('', map { "$_\0" } qw( -o /o/out -I lib -M Foo::** -M Baz bin/mcp-x )),
+    'argv_glob_modules: the NUL-separated output carries -M Foo::**');
+  my @direct = eval { DzilBinary::PPArgs::argv("$d/META.json", 'mcp-x', '/o/out', $d) };
+  is_deeply(\@direct, [qw( -o /o/out -I lib -M Foo::** -M Baz bin/mcp-x )], 'argv_glob_modules: argv() itself returns the same list');
+}
+
 { # unknown binary name
   my $d = tempdir(CLEANUP => 1);
   my $meta = write_meta($d, { platforms => [@ALL], binaries => {%BIN} });
@@ -811,6 +856,28 @@ sub dead {
   my $pm = make_zip("$d/pm.zip", 'lib/Foo/README' => "text\n", 'lib/Foo/Deep/X.pm' => "package Foo::Deep::X; 1;\n");
   ($rc) = run_script('require-gate.pl', $pm, 'Foo::*');
   is($rc, 0, 'require_glob_pm_beside_readme: a real .pm below lib/Foo/ still satisfies Foo::*');
+}
+
+# --- k30: require-gate and the pack of -M Foo::** -------------------------------
+
+{ # exactly what -M Foo::** packs: every level below Foo, not lib/Foo.pm
+  my $d = tempdir(CLEANUP => 1);
+  my $zip = make_zip("$d/ns.zip",
+    'lib/Foo/A.pm'         => "package Foo::A; 1;\n",
+    'lib/Foo/Bar/Quux.pm'  => "package Foo::Bar::Quux; 1;\n",
+    'lib/Foo/Bar/X/Y.pm'   => "package Foo::Bar::X::Y; 1;\n",
+  );
+  my ($rc, $out, $err) = run_script('require-gate.pl', $zip, 'Foo::*');
+  is($rc, 0, 'gate_ns_glob: Foo::* passes on the -M Foo::** pack') or diag "$out$err";
+  ($rc) = run_script('require-gate.pl', $zip, 'Foo');
+  is($rc, 1, 'gate_ns_exact: Foo fails, lib/Foo.pm is not part of -M Foo::**');
+  ($rc, $out, $err) = run_script('require-gate.pl', $zip, 'Foo::Bar::*');
+  is($rc, 0, 'gate_ns_deeper_glob: Foo::Bar::* met by lib/Foo/Bar/X/Y.pm and Quux.pm') or diag "$out$err";
+  ($rc) = run_script('require-gate.pl', $zip, 'Foo::Baz::*');
+  is($rc, 1, 'gate_ns_other_glob: Foo::Baz::* is not met');
+  my $only = make_zip("$d/deepest.zip", 'lib/Foo/Bar/X/Y.pm' => "package Foo::Bar::X::Y; 1;\n");
+  ($rc, $out, $err) = run_script('require-gate.pl', $only, 'Foo::Bar::*');
+  is($rc, 0, 'gate_ns_deep_only: Foo::Bar::* met by lib/Foo/Bar/X/Y.pm alone') or diag "$out$err";
 }
 
 # --- fix round 1: pp-args.pl child failures: one message each, no argv --------

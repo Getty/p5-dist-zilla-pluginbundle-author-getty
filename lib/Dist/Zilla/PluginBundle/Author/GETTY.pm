@@ -1297,12 +1297,18 @@ instead, as with C<docker_default>.
 
 Whitespace-separated modules packed into every binary besides what C<pp>
 finds itself, each passed as C<-M>. A trailing C<::*> takes the whole
-namespace. Default: none. Inherited by subsections.
+namespace below, at any depth, but not the module itself: C<Foo::*> goes to
+C<pp> as C<-M Foo::**> and packs every F<.pm> file below F<Foo/> in F<lib> and
+C<@INC>, not F<Foo.pm>; name C<Foo> as well to pack that too. A namespace with
+nothing in it packs nothing and does not fail the build; list it in
+C<binary_require> to make it fail. Default: none. Inherited by subsections.
 
 =head2 binary_require
 
 Whitespace-separated modules (or C<Namespace::*> globs) that have to be inside
-every finished binary; the build fails when one is missing. Default: none.
+every finished binary; the build fails when one is missing. A glob is the
+namespace of C<binary_modules>: any one module below C<Namespace>, at any
+depth, meets it, F<Namespace.pm> alone does not. Default: none.
 Inherited by subsections.
 
 =head2 binary_platforms

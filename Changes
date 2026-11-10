@@ -35,7 +35,9 @@
     published as assets of the GitHub release, so "dzil" now dies at build
     when "binary" is set together with "no_github" or "no_github_release",
     or when the dist has no GitHub remote (which makes "no_github" default
-    to on).
+    to on). A trailing "::*" in "binary_modules" packs every module below the
+    namespace at any depth, not the module itself (pp gets "-M Foo::**"), which
+    is the namespace "binary_require" checks for "Foo::*".
     Dists without "binary" keys are unchanged.
 
   - The new plugin Author::GETTY::GitHubRelease replaces GitHub::CreateRelease

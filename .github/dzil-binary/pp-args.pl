@@ -15,6 +15,14 @@ sub pp_args_lines {
   return grep { length } map { s/\r\z//r } split /\n/, $output;
 }
 
+# Same -M rule as the bundle's local check: each module as -M, a trailing ::*
+# as ::**, every module below at any depth (pp takes one level for ::*), the
+# namespace require-gate.pl checks for Glob::*.
+sub pp_module_args {
+  my (@modules) = @_;
+  return map { ('-M', s/::\*\z/::**/r) } @modules;
+}
+
 # Runs `sh -c <cmd>` in $dir without an argument; dies if it fails.
 sub run_in {
   my ($dir, $cmd) = @_;
@@ -77,7 +85,7 @@ sub argv {
   die "binary '$name' has no script\n" unless defined $b->{script} && length $b->{script};
 
   my @extra = defined $b->{pp_args} ? pp_args_lines(run_in($dist_root, $b->{pp_args})) : ();
-  return ('-o', $out, '-I', 'lib', (map { ('-M', $_) } @{ $b->{modules} || [] }), @extra, $b->{script});
+  return ('-o', $out, '-I', 'lib', pp_module_args(@{ $b->{modules} || [] }), @extra, $b->{script});
 }
 
 sub main {

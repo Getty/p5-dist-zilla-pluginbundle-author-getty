@@ -35,7 +35,7 @@ requires 'Pod::Elemental::Transformer::List', '0.102001';
 requires 'Pod::Weaver', '4.022';
 
 # Only the local pp check of a binary dist (see the Binaries section); DZIL_BINARY_SKIP=1 skips it.
-# 1.031 is the first pp to take the namespace forms of -M (binary_modules = Foo::*).
+# 1.031 is the first pp to take the namespace forms of -M (binary_modules = Foo::* goes as -M Foo::**).
 recommends 'PAR::Packer', '1.031';
 
 on test => sub {
