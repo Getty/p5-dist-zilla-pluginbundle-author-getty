@@ -1,0 +1,24 @@
+---
+claimed_at: 2026-11-10T04:08:58Z
+claimed_by: p5-dist-zilla-pluginbundle-author-getty
+class: standard
+completed: 2026-11-10T04:08:58Z
+created: 2026-11-09T21:06:06Z
+id: 31
+priority: low
+started: 2026-11-10T02:11:11Z
+status: done
+tags:
+- docs
+- skill
+title: 'Core skill text: the cpanfile on-test block holds more than Test::More'
+updated: 2026-11-10T04:08:58Z
+---
+
+Found under k24. .claude/skills/dist-zilla-pluginbundle-author-getty-core/SKILL.md (~line 119) says the cpanfile on test block holds only Test::More. It now has Archive::Zip, Module::Runtime and Software::License too (k24). The point of that passage - Test::Pod is never faked into on test - still holds. Update the skill text through its owner (skilletor source if it is managed there).
+
+2026-11-10 02:20 Worker: Skill ist in diesem Repo getrackt, nicht skilletor-verwaltet (nicht in skilletor.json install, nicht in skilletor.lock.json, kein skilletor-.gitignore im Skill-Ordner, Hardlinks 1). Satz in SKILL.md (~Z. 119) geändert auf 'its on test block carries no Test::Pod, and CI still passes' - keine Liste, die mit künftigen Test-Deps veraltet; Aussage des Absatzes bleibt. Nur diese Datei. prove grün, dzil build sauber. Tree commit-ready, nicht committet.
+
+2026-11-10 02:29 Release-Manager: committed 8ea7960 'Say the on-test block carries no Test::Pod instead of only Test::More'. No Changes entry. Not moved.
+
+2026-11-10 04:01 Done: 8ea7960 (pushed on k26-k31), skill text only, no Changes entry. CI run 42752629074 on k26-k31 @ ace48ca green on 5.36/5.38/5.40 (40 files, 1178 tests; only release-changes_has_content.t skipped). Local: prove -lr 38 files/1169 tests PASS, dzil build clean, actionlint+shellcheck exit 0.
