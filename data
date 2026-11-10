@@ -1,0 +1,28 @@
+---
+claimed_at: 2026-11-10T04:08:32Z
+claimed_by: p5-dist-zilla-pluginbundle-author-getty
+class: standard
+completed: 2026-11-10T04:08:32Z
+created: 2026-11-09T20:44:16Z
+id: 26
+priority: low
+started: 2026-11-10T01:21:17Z
+status: done
+tags:
+- build
+- metadata
+title: GiteaMeta and GithubMeta read only origin while the bundle detects any remote
+updated: 2026-11-10T04:08:32Z
+---
+
+Found under k23. The bundle detects remotes from all of them (_has_github_remote scans every remote URL, _remote_host/_remote_name take the first, origin first), but GithubMeta and Author::GETTY::GiteaMeta read only remote.origin.url. A dist whose only remote is a codeberg "upstream" gets GiteaMeta selected and no resources at all; a github "upstream" without origin likewise. Possible shape: pass the remote name (_remote_name) to both plugins (GithubMeta has a remote option; GiteaMeta is ours). k23 did this for [Repository] only.
+
+2026-11-10 01:29 Worker: configure() now passes _remote_name to GithubMeta (remote) and Author::GETTY::GiteaMeta (remote), same as [Repository] (git_remote) since k23; with origin nothing is passed, so the config stays as before. POD updated (overview, no_github, GiteaMeta DESCRIPTION + =attr remote). Decision on the mixed case: GithubMeta gets _remote_name, not the first GitHub remote. Reason: the bundle keeps only the boolean _has_github_remote; pointing GithubMeta at the GitHub remote without breaking the cwd hazard pattern (configure reads only lazy attributes that tests force in the tempdir) needs a new lazy attribute, about 10 lines, which is more than the 1-2 line budget. _remote_name never does worse than before: origin=codeberg+upstream=github and zeta=codeberg+upstream=github both give no resources, before and after (probe). Probe (Dist::Zilla::Tester build, no network): only upstream=github -> GithubMeta {issues,remote=upstream}, github resources (HEAD: none); only upstream=codeberg -> GiteaMeta {host,issues,remote=upstream}, codeberg resources (HEAD: none); origin github/codeberg -> config and resources same as HEAD. nice prove -lr -j4 t/: Files=37 Tests=1070 PASS, no skips. Dogfood dzil build clean, META resources unchanged; dzil clean done.
+
+2026-11-10 01:30 Backlog card (low) for this board: GithubMeta reads origin or the first remote, but the bundle picks GithubMeta when ANY remote is on github.com. Two cases build without repository resources: origin is not GitHub (e.g. codeberg) and another remote is (upstream=github); or there is no origin and the first remote is not GitHub. Possible shape: a lazy _github_remote_name (first github.com remote, origin first; _has_github_remote then = defined it), passed to GithubMeta as remote unless it is origin; tests force it in the tempdir. Same detail: the bundle tests m{\bgithub\.com\b}, GithubMeta tests m{\bgithub\.com[:/]}.
+
+2026-11-10 01:34 Test-Writer: t/repository_remote.t subtest 'GithubMeta and GiteaMeta are pointed at the remote too' (payloads: upstream github/codeberg get remote; origin and origin+upstream get none); t/support_build.t real builds for github/codeberg upstream (META repository/bugtracker resources). Upstream cases red against HEAD lib, green with fix. Files tracked, not committed.
+
+2026-11-10 01:36 Committed 618fb86: Point GithubMeta and GiteaMeta at the first remote when there is no origin. Changes: repository metadata entry reworded, all three plugins read origin or the first remote. prove 37 files/1073 tests PASS, dzil build clean. Not moved, not pushed.
+
+2026-11-10 04:00 Done: 618fb86 (pushed on k26-k31). CI run 42752629074 on k26-k31 @ ace48ca green on 5.36/5.38/5.40 (40 files, 1178 tests; only release-changes_has_content.t skipped). Local: prove -lr 38 files/1169 tests PASS, dzil build clean, actionlint+shellcheck exit 0. Open, not filed: mixed case origin=Codeberg + upstream=GitHub still yields no GitHub resources (possible fix: lazy _github_remote_name).
