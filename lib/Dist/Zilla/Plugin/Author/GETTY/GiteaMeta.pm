@@ -19,8 +19,9 @@ API).
 
 Within L<Dist::Zilla::PluginBundle::Author::GETTY> this plugin is the
 Gitea/Forgejo counterpart of L<Dist::Zilla::Plugin::GithubMeta>: the bundle
-auto-selects it (passing the detected L</host>) for dists whose remote points
-at a known Gitea host, or when C<gitea = 1> is set. It is additive —
+auto-selects it (passing the detected L</host>, and L</remote> when the dist
+has no C<origin>) for dists whose remote points at a known Gitea host, or when
+C<gitea = 1> is set. It is additive —
 GitHub-hosted distributions keep using C<GithubMeta> unchanged.
 
 The C<owner/repo> slug is taken from the git remote and the URLs are built for
@@ -33,6 +34,7 @@ never emits metadata for the wrong forge.
 =attr remote
 
 Name of the git remote to read the repository URL from. Default: C<origin>.
+The bundle sets this to the dist's first remote when there is no C<origin>.
 
 =cut
 

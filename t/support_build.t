@@ -164,4 +164,19 @@ subtest 'build with only a gitlab remote named upstream' => sub {
   is($json->{resources}{repository}{url}, 'https://gitlab.com/getty/p5-some-dist.git', 'META.json carries the repository url');
 };
 
+for my $case (
+  [ github   => 'https://github.com/x/y.git',   'https://github.com/x/y' ],
+  [ codeberg => 'https://codeberg.org/x/y.git', 'https://codeberg.org/x/y' ],
+) {
+  my ($label, $url, $web) = @$case;
+  subtest "build with only a $label remote named upstream" => sub {
+    my ($tzil, $stderr, $built) = build($url, 'upstream');
+    unlike($stderr, qr/svn/, 'no `git svn info` probe on STDERR');
+    my $res = $tzil->distmeta->{resources};
+    is($res->{repository}{url}, $url, 'resources.repository.url');
+    is($res->{repository}{web}, $web, 'resources.repository.web');
+    is($res->{bugtracker}{web}, "$web/issues", 'resources.bugtracker.web');
+  };
+}
+
 done_testing;

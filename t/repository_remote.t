@@ -172,4 +172,35 @@ subtest '[Repository] is pointed at the remote it can read' => sub {
   is scalar(_repository_entries($r)), 0, 'no remote: no [Repository] at all';
 };
 
+# The payload of the one plugin whose class ends in ::$short (or is $short).
+sub _meta_payload {
+  my ($r, $short) = @_;
+  my @e = grep { $_->[1] =~ /(?:\A|::)\Q$short\E\z/ } @{ $r->{plugins} };
+  return @e ? $e[0][2] : undef;
+}
+
+subtest 'GithubMeta and GiteaMeta are pointed at the remote too' => sub {
+  my $r = _in_dir(_repo(tempdir(CLEANUP => 1), upstream => 'https://github.com/x/y.git'));
+  is_deeply _meta_payload($r, 'GithubMeta'), { issues => 1, remote => 'upstream' },
+    'only a github upstream: GithubMeta remote = upstream';
+
+  $r = _in_dir(_repo(tempdir(CLEANUP => 1), upstream => 'https://codeberg.org/x/y.git'));
+  is_deeply _meta_payload($r, 'GiteaMeta'), { issues => 1, host => 'codeberg.org', remote => 'upstream' },
+    'only a codeberg upstream: GiteaMeta remote = upstream';
+
+  $r = _in_dir(_repo(tempdir(CLEANUP => 1), origin => 'https://github.com/x/y.git'));
+  is_deeply _meta_payload($r, 'GithubMeta'), { issues => 1 }, 'github origin: no remote key';
+
+  $r = _in_dir(_repo(tempdir(CLEANUP => 1), origin => 'https://codeberg.org/x/y.git'));
+  is_deeply _meta_payload($r, 'GiteaMeta'), { issues => 1, host => 'codeberg.org' }, 'codeberg origin: no remote key';
+
+  $r = _in_dir(_repo_ordered(tempdir(CLEANUP => 1),
+    upstream => 'https://github.com/x/y.git', origin => 'https://github.com/x/y.git'));
+  is_deeply _meta_payload($r, 'GithubMeta'), { issues => 1 }, 'github origin + upstream: no remote key';
+
+  $r = _in_dir(_repo_ordered(tempdir(CLEANUP => 1),
+    upstream => 'https://codeberg.org/x/y.git', origin => 'https://codeberg.org/x/y.git'));
+  is_deeply _meta_payload($r, 'GiteaMeta'), { issues => 1, host => 'codeberg.org' }, 'codeberg origin + upstream: no remote key';
+};
+
 done_testing;

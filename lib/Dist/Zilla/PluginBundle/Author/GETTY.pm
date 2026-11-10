@@ -95,7 +95,8 @@ In default configuration it is equivalent to:
 
   [GithubMeta]      ; with a GitHub remote; a Gitea/Forgejo remote gets
                     ; [Author::GETTY::GiteaMeta], any other remote
-                    ; [Repository], no remote at all none of them
+                    ; [Repository], no remote at all none of them;
+                    ; each reads origin, or the first remote without one
 
   [InstallRelease]
   install_command = cpanm .
@@ -302,12 +303,15 @@ remote pointing at a Gitea/Forgejo host gets proper C<repository>/
 C<bugtracker>/C<homepage> resources via
 L<Dist::Zilla::Plugin::Author::GETTY::GiteaMeta> (the Gitea/Forgejo counterpart
 of L<Dist::Zilla::Plugin::GithubMeta>); any other remote falls back to the
-generic L<Dist::Zilla::Plugin::Repository>, which reads C<origin>, or the first
-remote when there is no C<origin>. A repository without any remote
+generic L<Dist::Zilla::Plugin::Repository>. A repository without any remote
 gets none of them: there is no URL to report. The known Gitea hosts
 (C<codeberg.org> and the author's own instance) are detected automatically;
 for any other self-hosted Gitea/Forgejo instance set L</gitea>. Purely
 additive — GitHub-hosted distributions are unaffected.
+
+The repository metadata comes from the C<origin> remote, or from the first
+remote when there is no C<origin>: GithubMeta, GiteaMeta and Repository are all
+pointed at it, and its host is the one checked for a Gitea/Forgejo forge.
 
 =head2 gitea
 
@@ -879,8 +883,8 @@ has gitea => (
 my @KNOWN_GITEA_HOSTS = qw( codeberg.org src.ci );
 
 # Host of the dist's origin remote, or of the first remote if there is no
-# origin (GiteaMeta reads remote.origin.url and wants the hosts to match).
-# Undef when there is no remote.
+# origin (GiteaMeta is pointed at the same remote and wants the hosts to
+# match). Undef when there is no remote.
 has _remote_host => (
   is      => 'ro',
   isa     => 'Maybe[Str]',
@@ -1558,21 +1562,26 @@ sub configure {
   # host; anything else with a remote falls back to the generic Repository.
   # Without any remote there is no URL to report, and Repository would only
   # run `git svn info` ("git: 'svn' is not a git command"), so none is added.
+  # Each of the three reads a single remote, origin by default, so a
+  # repository with no origin points them at its first remote (the one
+  # _remote_host comes from). With origin nothing is passed.
+  my $remote = $self->_remote_name;
+  undef $remote if defined $remote && $remote eq 'origin';
   if (!$self->no_github) {
-    $self->add_plugins([ 'GithubMeta' => { issues => 1 } ]);
+    $self->add_plugins([ 'GithubMeta' => {
+      issues => 1,
+      (defined $remote ? (remote => $remote) : ()),
+    } ]);
   }
   elsif ($self->_is_gitea_remote) {
     $self->add_plugins([ 'Author::GETTY::GiteaMeta' => {
       issues => 1,
       host   => $self->_remote_host,
+      (defined $remote ? (remote => $remote) : ()),
     } ]);
   }
   elsif ($self->_has_remote) {
-    # Repository reads only remote.<git_remote>.url (default origin) and
-    # without it falls back to `git svn info` as well, so a repository with no
-    # origin points it at its first remote. With origin nothing is passed.
-    my $remote = $self->_remote_name;
-    $self->add_plugins(defined $remote && $remote ne 'origin'
+    $self->add_plugins(defined $remote
       ? [ 'Repository' => { git_remote => $remote } ]
       : 'Repository');
   }

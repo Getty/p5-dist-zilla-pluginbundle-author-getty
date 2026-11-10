@@ -13,7 +13,7 @@
     IRC resource.
   - Repository metadata comes from GithubMeta for a GitHub remote, from
     GiteaMeta for a Gitea or Forgejo remote and from [Repository] for any
-    other remote; [Repository] reads origin, or the first remote when there
+    other remote; each of them reads origin, or the first remote when there
     is no origin. A repository without a remote builds without one and
     without empty bugtracker or repository entries in META.json.
 
