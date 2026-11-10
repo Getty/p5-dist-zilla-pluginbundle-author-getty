@@ -1,0 +1,27 @@
+---
+claimed_at: 2026-11-10T02:03:43Z
+claimed_by: p5-dist-zilla-pluginbundle-author-getty
+class: standard
+completed: 2026-11-10T02:03:43Z
+created: 2026-11-09T21:05:53Z
+id: 29
+priority: low
+started: 2026-11-10T01:02:43Z
+status: done
+tags:
+- bug
+- run
+title: run_if_trial_*, run_no_trial_*, run_if_release_* and run_no_release_* are silently
+  dropped
+updated: 2026-11-10T02:03:43Z
+---
+
+Found under k24. The bundle declares the attributes (@run_ways in lib/Dist/Zilla/PluginBundle/Author/GETTY.pm ~line 1277, also in mvp_multivalue_args), but configure() only passes run_<phase> to the Run::* plugins (~line 1465, my $func = "run_".$_). So the POD example "run_if_release_test = ./Build install" (~line 156) has no effect. A probe with payload {run_if_release_test => [...], run_test => [...]} gave only Run::Test => {run => [...]}. Fix: pass every run way to its Run::<Phase> plugin (run_if_trial/run_no_trial/run_if_release/run_no_release are Dist::Zilla::Plugin::Run options, Run::Role::Runner), with a test per way.
+
+2026-11-10 01:10 cpanfile Dist::Zilla::Plugin::Run: alt 0.050, neu 0.050 (kein Anheben nötig). Beleg: Run Changes 0.016 (2013-02-13) "Add 'run_no_trial' option for running commands only when it is not a trial build/release."; 0.018 (2013-03-02) "Added new options, cleaned up documentation" — Quellvergleich Run/Role/Runner.pm 0.017 -> 0.018 (MetaCPAN source) zeigt dort neu: has run_if_trial, has run_if_release, has run_no_release, DZIL_RELEASING-Auswertung, mvp_multivalue_args qw(run run_no_trial run_if_trial run_if_release run_no_release). Mindestens nötig wäre 0.018; 0.050 (installiert, Runner.pm: has [ qw(run run_if_trial run_no_trial run_if_release run_no_release) ]) enthält alle fünf. Alle sechs Phasen-Plugins (AfterBuild BeforeBuild BeforeRelease Release AfterRelease Test) komponieren Run::Role::Runner und rufen _call_script, das alle fünf auswertet.
+
+2026-11-10 01:11 Worker: Implementierung fertig, Tree commit-ready (nur lib/Dist/Zilla/PluginBundle/Author/GETTY.pm). Neuer Helper _run_config($phase) liefert die gesetzten run_*_<phase> als Run-Optionen ohne Phasen-Suffix; die Run-Schleife in configure() (gleiche Stelle, ein Run::<Phase> pro Phase, keins wenn alles leer) und die FakeRelease-Bedingung (!%{ $self->_run_config('release') }) nutzen ihn. POD: Run-Shortcuts um Phasenliste + die vier bedingten Formen ergänzt, no_cpan nennt alle fünf run_*_release. prove -lr -j4 t/: 36 Dateien, 1057 Tests, PASS, keine Skips. dzil build sauber, woven POD podchecker OK, danach dzil clean. Probe {run_if_release_test=>['./Build install'], run_test=>['x']} -> Run::Test => { run => ['x'], run_if_release => ['./Build install'] }. Tests fehlen noch (Test-Writer).
+
+2026-11-10 01:18 Commit 257ce4f 'Pass the conditional run_*_<phase> keys on to Run::<Phase>' on k29 (lib, t/run_ways.t, t/no_cpan_release.t, Changes). Changes: own entry under {{$NEXT}} - the four conditional keys reach Run::<Phase> as run_if_trial/run_no_trial/run_if_release/run_no_release next to run_<phase>; no_cpan + any release-phase key = no FakeRelease. Run version: alt 0.050 -> neu 0.050, kein Bump (conditional options since Run 0.018, see note above). prove -lr -j4 t/: 37 files, 1070 tests PASS; dzil build clean. Card not moved.
+
+2026-11-10 01:26 Pushed k29 @ 257ce4f 'Pass the conditional run_*_<phase> keys on to Run::<Phase>' (not merged). Bundle CI run 42735155720: green on 5.36/5.38/5.40 (39 files, 1079 tests each; only release-changes_has_content.t skipped without RELEASE_TESTING, as always). Local: nice prove -lr -j4 t/ 37 files/1070 tests PASS, dogfood dzil build clean. cpanfile Dist::Zilla::Plugin::Run: old 0.050, new 0.050 (no bump) - the conditional options exist since 0.018 (Run Changes 0.016 'Add run_no_trial option', 0.018 'Added new options'; Runner.pm 0.017 vs 0.018 on MetaCPAN). FakeRelease now left out for no_cpan whenever any run_*_release key brings Run::Release (coupled to this card). Backlog find not filed (karr create refused by the permission system in this session): README.md Run Hooks prose describes run_if_release_*/run_no_release_* and %s wrongly - text sent to the hub.
