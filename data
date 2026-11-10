@@ -1,0 +1,27 @@
+---
+claimed_at: 2026-11-10T04:08:39Z
+claimed_by: p5-dist-zilla-pluginbundle-author-getty
+class: standard
+completed: 2026-11-10T04:08:39Z
+created: 2026-11-09T20:44:21Z
+id: 27
+priority: low
+started: 2026-11-10T01:38:08Z
+status: done
+tags:
+- build
+- windows
+title: 'Remote detection on native Windows: _remote_urls uses single quotes and 2>/dev/null
+  in backticks'
+updated: 2026-11-10T04:08:39Z
+---
+
+Found under k22. _remote_urls in lib/Dist/Zilla/PluginBundle/Author/GETTY.pm runs git through backticks with single-quoted arguments and 2>/dev/null, which cmd.exe does not understand; on native Windows the remote list is then probably always empty, so a GitHub dist would get no_github = 1 and no GithubMeta. Not verified on Windows. Check on a windows-latest probe and, if real, run git with a list form (no shell) instead.
+
+2026-11-10 01:51 Fix in tree: _remote_urls (bundle) and GiteaMeta _build_remote_info run git through a list-form pipe open (no shell), STDERR dup'ed to File::Spec->devnull for the call and restored; one private _git_output helper per module (no new module). Linux: prove -lr green (37 files/1073), dogfood dzil build META still GitHub via origin. Linux repro of the old GiteaMeta form: a remote named x'&%PATH% -> 'sh: Syntax error: Unterminated quoted string' on STDERR, _remote_info undef; new form reads it. Next: windows-latest probe workflow (scratch, not in repo).
+
+2026-11-10 01:59 Probe written (not in repo): /home/getty/.claude/jobs/5d8b793e/tmp/tmp.VWFoQ9NDk6/k27-probe.yml - windows-latest, Strawberry 5.40, Dist::Zilla roles/bundles stubbed so only Moose is installed; cases (0) capture control, (a) upstream+x'&%PATH%+origin, (b) no remote, (c) broken .git/config, (d) no repo, (e) no git on PATH; exact expectations, red on mismatch. Dry run on Linux: green against the fix, 6 not ok against 7d74d15's modules. actionlint 1.7.7 (+ shellcheck 0.10.0) clean on the probe and on .github/workflows; shellcheck clean on .github/dzil-binary/*.sh and install.sh.in. Windows claims unverified until the probe runs. Observation, no card proposed: external GithubMeta interpolates the remote name into backticks (git remote show -n $remote) - only an exotic remote name breaks it, upstream's code.
+
+2026-11-10 02:09 Committed f71a85b on k26-k31: Run git without a shell when reading the remotes. Changes: remote detection and GiteaMeta run git directly without a shell, so GitHub/Gitea/Forgejo remotes are recognised on native Windows and a remote name reaches git as it is. prove -lr 38 files/1078 green, dzil build clean. Not moved.
+
+2026-11-10 04:01 Done: f71a85b (pushed on k26-k31). Windows proof: probe run 42740896885 on 5c1e95c red (cmd.exe: 'The system cannot find the path specified.', no remotes), run 42741159464 on 98b6a3c with the fix green 51/51; k27-probe branch deleted. CI run 42752629074 on k26-k31 @ ace48ca green on 5.36/5.38/5.40 (40 files, 1178 tests; only release-changes_has_content.t skipped). Local: prove -lr 38 files/1169 tests PASS, dzil build clean, actionlint+shellcheck exit 0.
