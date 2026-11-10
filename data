@@ -1,0 +1,25 @@
+---
+claimed_at: 2026-11-10T04:08:45Z
+claimed_by: p5-dist-zilla-pluginbundle-author-getty
+class: standard
+completed: 2026-11-10T04:08:45Z
+created: 2026-11-09T20:44:27Z
+id: 28
+priority: low
+started: 2026-11-10T02:10:49Z
+status: done
+tags:
+- binary
+title: 'Binary.pm: misleading pp exit code when pp cannot be started'
+updated: 2026-11-10T04:08:45Z
+---
+
+Found under k22. In after_build of lib/Dist/Zilla/Plugin/Author/GETTY/Binary.pm, when pp cannot be started at all (system returns -1, $? == -1) the message reads "pp failed for binary NAME (exit 72057594037927935)". Report $! (cannot run pp: <reason>) for $? == -1 instead. Cosmetic.
+
+2026-11-10 02:20 Worker: Binary.pm after_build sichert $! direkt nach _run_pp; bei rc == -1 jetzt 'cannot run pp for binary NAME: <$!>' (Form wie 'cannot run binary_pp_args of NAME: ...' und 'pp failed for binary NAME'), Exit-Meldung unverändert. Geprüft per Scratch-Stub (#!/nonexistent/interpreter -> 'No such file or directory', #!/etc/hostname -> 'Permission denied'). _pp_args_output: keine Lücke (list-open meldet Exec-Fehler mit $!). Backlog-Karte low: _run_hook meldet bei sh nicht startbar (-1) nur 'binary_HOOK failed for NAME: CMD' ohne $! - nicht irreführend, aber ohne Grund. prove -lr -j4 t/ 38 Dateien/1078 Tests grün, dzil build sauber. Test fehlt (Test-Writer). Tree commit-ready, nicht committet.
+
+2026-11-10 02:25 Test-Writer: Tests in t/binary-build.t (unstartable_pp via #!/nonexistent/interpreter, failing_pp exit 4) und t/binary-win32.t (unstartbares $^X, pp exit 4). Gegen HEAD-Binary.pm rot: unstartable_pp (3 Tests), Win32-unstartbar (1); exit-4-Tests gruen auf HEAD. Nicht committet.
+
+2026-11-10 02:29 Release-Manager: committed 31c02c8 'Say why pp cannot start instead of printing a bogus exit code'. Changes: sentence 'When pp cannot be started, the build names the reason.' in the binary local-build entry. Not moved.
+
+2026-11-10 04:01 Done: 31c02c8 (pushed on k26-k31); Changes paragraph rewrapped in 2549f83. CI run 42752629074 on k26-k31 @ ace48ca green on 5.36/5.38/5.40 (40 files, 1178 tests; only release-changes_has_content.t skipped). Local: prove -lr 38 files/1169 tests PASS, dzil build clean, actionlint+shellcheck exit 0. Open, not filed: _run_hook does not name a reason when sh cannot start.
