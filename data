@@ -1,0 +1,28 @@
+---
+claimed_at: 2026-11-10T04:08:51Z
+claimed_by: p5-dist-zilla-pluginbundle-author-getty
+class: standard
+completed: 2026-11-10T04:08:51Z
+created: 2026-11-09T21:05:59Z
+id: 30
+priority: low
+started: 2026-11-10T03:14:57Z
+status: done
+tags:
+- binary
+- pod
+title: 'binary_modules POD: a trailing ::* does not take the whole namespace in pp'
+updated: 2026-11-10T04:08:51Z
+---
+
+Found under k24. The POD of binary_modules says "A trailing ::* takes the whole namespace", but pp (PAR::Packer 1.064 pp.pm) takes only one level for -M Foo::* (not Foo itself, not Foo::Bar::Quux); the whole namespace is -M Foo:: or -M Foo::**. require-gate.pl on the other hand treats Glob::* at any depth (lib/Foo/.+\.pm). Decide: correct the POD, or translate the glob form for pp (e.g. Foo::* -> Foo::**), and keep require-gate.pl consistent with it.
+
+2026-11-10 03:29 Decision: binary_modules Foo::* goes to pp as -M Foo::** (every module below Foo at any depth, not Foo itself). That is the namespace require-gate.pl already checks for Glob::* (any lib/Glob/.+\.pm, Glob.pm alone does not count), so require-gate.pl stays unchanged. Why not -M Foo:: (Foo plus Foo::**): pp dies when Foo.pm is missing. Checked with pp 1.064 in scratch: 'Cannot find module Foo.pm (specified with -M)', exit 2, no binary. Pure namespaces (plugin dirs without a base module) would then be unusable, and the two glob vocabularies would differ. Anyone who wants Foo too lists Foo next to Foo::*. Mapping s/::\*\z/::**/: Foo::**, Foo:: and plain modules go to pp unchanged. Both -M sites go through a twin helper with an identical body: pp_module_args in .github/dzil-binary/pp-args.pl and _pp_module_args in Binary.pm (same pattern as pp_args_lines/_pp_args_lines). pp 1.064 source: PAR/Packer.pm pack_manifest_hash, -M loop ~l.678-697 (::* -> Module::ScanDeps::_glob_in_inc_1, one level; ::** -> _glob_in_inc, all depths; :: -> _name2moddata(Foo) + ::**), then l.749 _die 'Cannot find module ... (specified with -M)'. An empty namespace packs nothing at exit 0 (checked); binary_require catches that. 1.031: Changes 1.031 (2016-04-10) 'pp now accepts -M Foo::, -M Foo:*, -M Foo:**'. The -M loop in the 1.031 Packer.pm (metacpan source) matches 1.064 line for line, so recommends PAR::Packer 1.031 stays.
+
+2026-11-10 03:35 Correction: the pp die is at PAR/Packer.pm l.750, not l.749. Done: POD binary_modules and binary_require (GETTY.pm), POD modules (Binary.pm), cpanfile comment. README.md has no Binaries section, so it is untouched. Verified: binary t/ files green (prove -l t/binary-{scripts,build,win32,config,install,publish}.t, 565 tests); scratch end-to-end pp-args.pl -> pp 1.064 -> require-gate.pl (Foo::* packs lib/Foo/A.pm and lib/Foo/Bar/Quux.pm, gate Foo::* passes, gate Foo fails); dogfood dzil build clean, then dzil clean. Not run: full prove -lr -j4 t/, refused twice by loadguard (heavy slots busy). shellcheck/actionlint not applicable: no shell script or workflow changed. Open for test-writer: helper table and parity tests for pp_module_args/_pp_module_args, -M Foo::** in the argv of both sites, META.json modules keeps Foo::*.
+
+2026-11-10 03:51 2026-11-10 Tests (test-writer): t/binary-scripts.t (helper table + parity of pp_module_args/_pp_module_args, argv/NUL for [Foo::*,Baz], gate ns cases), t/binary-build.t (glob_modules: -M A::** -M B -M C::D::** in pp argv), t/binary-config.t (meta_glob: x_binaries keeps Foo::*). Red against HEAD: helper table, argv_glob_modules, glob_modules; green against HEAD: gate_ns_*, meta_glob. Full prove -lr -j4 t/: 38 files, 1169 tests pass, no skips seen; dogfood dzil build clean, dzil clean ran.
+
+2026-11-10 03:52 Committed as ace48ca: Pack the whole namespace for a trailing ::* in binary_modules. Card stays in-progress until CI.
+
+2026-11-10 04:01 Done: ace48ca (pushed on k26-k31). Decision: Foo::* -> pp -M Foo::** (all depths, not Foo.pm), same namespace as require-gate.pl; -M Foo:: rejected (dies without Foo.pm). PAR::Packer 1.031 already has ::** (recommends stays). CI run 42752629074 on k26-k31 @ ace48ca green on 5.36/5.38/5.40 (40 files, 1178 tests; only release-changes_has_content.t skipped). Local: prove -lr 38 files/1169 tests PASS, dzil build clean, actionlint+shellcheck exit 0.
