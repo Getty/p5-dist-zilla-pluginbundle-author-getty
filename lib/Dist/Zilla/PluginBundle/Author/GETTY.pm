@@ -156,6 +156,44 @@ You can also use shortcuts for integrating L<Dist::Zilla::Plugin::Run>:
   run_if_release_test = ./Build install
   run_if_release_test = make install
 
+The phases are C<after_build>, C<before_build>, C<before_release>, C<release>,
+C<after_release> and C<test>; each phase that has any of these keys gets one
+plugin of the matching name (L<Dist::Zilla::Plugin::Run::AfterBuild>,
+L<Dist::Zilla::Plugin::Run::BeforeBuild>,
+L<Dist::Zilla::Plugin::Run::BeforeRelease>,
+L<Dist::Zilla::Plugin::Run::Release>,
+L<Dist::Zilla::Plugin::Run::AfterRelease>, L<Dist::Zilla::Plugin::Run::Test>).
+Besides C<run_E<lt>phaseE<gt>>, which always runs its command, every phase
+takes the conditional forms of L<Dist::Zilla::Plugin::Run>, passed on as the
+option of the same name without the phase suffix (C<run_if_release_test>
+becomes C<run_if_release> of C<Run::Test>):
+
+=over 4
+
+=item *
+
+C<run_if_trial_E<lt>phaseE<gt>> runs its command only on a trial build or
+release
+
+=item *
+
+C<run_no_trial_E<lt>phaseE<gt>> runs its command only on a build or release
+that is not a trial
+
+=item *
+
+C<run_if_release_E<lt>phaseE<gt>> runs its command only during C<dzil release>
+(C<DZIL_RELEASING> is set)
+
+=item *
+
+C<run_no_release_E<lt>phaseE<gt>> runs its command only outside of
+C<dzil release>
+
+=back
+
+All of these keys can be given more than once.
+
 You can also use add up configuration for L<Dist::Zilla::Plugin::Git::GatherDir>,
 excluding I<root> or I<prefix>:
 
@@ -301,9 +339,11 @@ Dist::Zilla refuses to release without a Releaser plugin, so the bundle adds
 L<Dist::Zilla::Plugin::FakeRelease> in its place, which lets C<dzil release>
 run the rest of the flow (changelog, tag, version bump, push). It is left out
 when the dist brings a Releaser of its own: the default Docker subsection
-(L</docker_image>) or C<run_release>. A Releaser you add by hand to your
-F<dist.ini> is not seen by the bundle, so if you do that, you will have the
-fake one as well.
+(L</docker_image>) or L<Dist::Zilla::Plugin::Run::Release>, which any of
+C<run_release>, C<run_if_trial_release>, C<run_no_trial_release>,
+C<run_if_release_release> and C<run_no_release_release> adds. A Releaser you
+add by hand to your F<dist.ini> is not seen by the bundle, so if you do that,
+you will have the fake one as well.
 
 It also makes B<version_finder> default to C<:MainModule>.
 
@@ -1352,6 +1392,18 @@ sub _binary_defaults {
   return %d;
 }
 
+# The run_*_<phase> keys of one phase, as the options of its Run::<Phase>
+# plugin (their own names, without the phase suffix). Only those that are set.
+sub _run_config {
+  my ($self, $phase) = @_;
+  my %run;
+  for my $way (@run_ways) {
+    my $attr = $way.'_'.$phase;
+    $run{$way} = $self->$attr if @{ $self->$attr };
+  }
+  return \%run;
+}
+
 # The binary names declared with binary = ..., whitespace split.
 sub _binaries {
   my ($self) = @_;
@@ -1462,13 +1514,11 @@ sub configure {
 
   for (@run_options) {
     my $net = $_;
-    my $func = 'run_'.$_;
-    if (@{$self->$func}) {
+    my $run = $self->_run_config($_);
+    if (%$run) {
       my $plugin = join('',map { ucfirst($_) } split(/_/,$_));
       $self->add_plugins([
-        'Run::'.$plugin => {
-          run => $self->$func,
-        }
+        'Run::'.$plugin => $run,
       ]);
     }
   }
@@ -1593,9 +1643,10 @@ sub configure {
 
   # @Basic's UploadToCPAN is the Releaser that no_cpan removes, and
   # Dist::Zilla refuses to release without any Releaser. Unless the dist
-  # brings its own (the Docker default, or run_release), fake one so the rest
-  # of the flow (changelog, tag, version bump, push) runs.
-  if ($self->no_cpan && !$self->_docker_default && !@{ $self->run_release }) {
+  # brings its own (the Docker default, or the Run::Release that any
+  # run_*_release adds), fake one so the rest of the flow (changelog, tag,
+  # version bump, push) runs.
+  if ($self->no_cpan && !$self->_docker_default && !%{ $self->_run_config('release') }) {
     $self->add_plugins('FakeRelease');
   }
 
