@@ -159,10 +159,15 @@ sub _pp_args_output {
   return $output // '';
 }
 
-# Runs `sh -c 'CMD "$@"' sh ARG`, CMD with ARG as its argument.
+# Runs `sh -c 'CMD "$@"' sh ARG`, CMD with ARG as its argument, without
+# PERL5LIB. A defined PERL5LIB goes in DZIL_BINARY_PERL5LIB; without, that is
+# unset too.
 sub _run_hook {
-  my ($cmd, $arg) = @_;
+  my ($cmd, $arg, $perl5lib) = @_;
   my $script = "$cmd \"\$@\"";
+  delete local $ENV{PERL5LIB};
+  delete local $ENV{DZIL_BINARY_PERL5LIB};
+  $ENV{DZIL_BINARY_PERL5LIB} = $perl5lib if defined $perl5lib;
   return system('sh', '-c', $script, 'sh', $arg) unless $^O eq 'MSWin32';
   local $ENV{DZIL_BINARY_HOOK} = $script;
   local $ENV{DZIL_BINARY_OUT}  = $arg;
@@ -210,11 +215,14 @@ sub after_build {
     $self->log_fatal("cannot run pp for binary $name: $why") if $rc == -1;
     $rc == 0 or $self->log_fatal("pp failed for binary $name (exit " . ($? >> 8) . ")");
 
+    # As in the workflow: verify gets the PERL5LIB pp ran under, the caller's
+    # (empty without one), in DZIL_BINARY_PERL5LIB; smoke gets neither.
+    my %perl5lib = ( verify => $ENV{PERL5LIB} // '' );
     for my $hook (qw( verify smoke )) {
       my $cmd = $self->$hook;
       next unless defined $cmd;
       $self->log("$hook $name");
-      _run_hook($cmd, $out) == 0
+      _run_hook($cmd, $out, $perl5lib{$hook}) == 0
         or $self->log_fatal("binary_$hook failed for $name: $cmd");
     }
   });
@@ -280,11 +288,16 @@ Shell command whose output lines are added to the C<pp> command line.
 
 =head2 verify
 
-Shell command run with the packed binary as its argument.
+Shell command run with the packed binary as its argument. It runs without
+C<PERL5LIB> and gets in C<DZIL_BINARY_PERL5LIB> the C<PERL5LIB> under which
+C<pp> loaded the distribution's dependencies; in the local check that is the
+caller's C<PERL5LIB>, empty without one.
 
 =head2 smoke
 
-Shell command the workflow runs with the binary on a machine without Perl.
+Shell command the workflow runs with the binary on a machine without Perl. It
+runs without C<PERL5LIB> and without C<DZIL_BINARY_PERL5LIB>, in the local check
+too.
 
 =head2 platforms
 

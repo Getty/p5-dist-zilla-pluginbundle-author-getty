@@ -384,4 +384,63 @@ block 'after_build MSWin32' => sub {
   like $@, qr/pp not found in PATH/, 'after_build (MSWin32): no pp at all still dies with the hint';
 };
 
+# --- the hook environment: PERL5LIB out, DZIL_BINARY_PERL5LIB for verify only (k32) ---
+
+# What the hook sees: "PERL5LIB:<set|unset> DZIL_BINARY_PERL5LIB:<set|unset>=<value>".
+my $SEEN = q{printf '%s\n' "PERL5LIB:$(if [ "${PERL5LIB+y}" ]; then echo set; else echo unset; fi) DZIL_BINARY_PERL5LIB:$(if [ "${DZIL_BINARY_PERL5LIB+y}" ]; then echo set; else echo unset; fi)=${DZIL_BINARY_PERL5LIB-}" >> "$DBLOG"; :};
+
+block '_run_hook environment' => sub {
+  for my $os ('linux', 'MSWin32') {
+    local $^O = $os;
+    my $log = $tmp->child("runhook-$os.log");
+    local $ENV{DBLOG} = "$log";
+    local $ENV{PERL5LIB} = '/caller/lib';
+    local $ENV{DZIL_BINARY_PERL5LIB} = 'stale';
+    my $seen = sub {
+      my ($p5) = @_;
+      $log->remove;
+      $CLASS->can('_run_hook')->($SEEN, '/x/NAME', $p5) == 0 or die "hook failed";
+      return scalar $log->slurp;
+    };
+    is $seen->('X'), "PERL5LIB:unset DZIL_BINARY_PERL5LIB:set=X\n",
+      "_run_hook ($os): a third parameter reaches the hook as DZIL_BINARY_PERL5LIB, PERL5LIB is gone";
+    is $seen->(''), "PERL5LIB:unset DZIL_BINARY_PERL5LIB:set=\n",
+      "_run_hook ($os): an empty third parameter sets DZIL_BINARY_PERL5LIB, empty";
+    is $seen->(undef), "PERL5LIB:unset DZIL_BINARY_PERL5LIB:unset=\n",
+      "_run_hook ($os): no third parameter leaves DZIL_BINARY_PERL5LIB unset, a stale caller's value too";
+    is $ENV{PERL5LIB}, '/caller/lib', "_run_hook ($os): the caller's PERL5LIB is restored";
+    is $ENV{DZIL_BINARY_PERL5LIB}, 'stale', "_run_hook ($os): the caller's DZIL_BINARY_PERL5LIB is restored";
+  }
+};
+
+# after_build: verify gets the caller's PERL5LIB in DZIL_BINARY_PERL5LIB, smoke gets neither.
+block 'after_build hook environment' => sub {
+  my $n = 0;
+  for my $os ('linux', 'MSWin32') {
+    for my $p5 ('/caller/lib/perl5', undef) {
+      my $label = "after_build ($os, caller PERL5LIB " . (defined $p5 ? 'set' : 'unset') . ')';
+      my $root   = build_root('envhook-' . $n++);
+      my $bindir = $tmp->child("envhook-bin-$n");
+      $bindir->mkpath;
+      $bindir->child('pp')->spew($stub->slurp);
+      chmod 0755, $bindir->child('pp');
+      my $log = $tmp->child("envhook-$n.log");
+      local $ENV{PATH} = "$bindir:$ENV{PATH}";
+      local $ENV{DBLOG} = "$log";
+      delete local $ENV{DZIL_BINARY_SKIP};
+      delete local $ENV{PERL5LIB};
+      local $ENV{PERL5LIB} = $p5 if defined $p5;
+      local $ENV{DZIL_BINARY_PERL5LIB} = 'stale-from-caller';
+      local $^O = $os;
+      local $^X = "$stub" if $os eq 'MSWin32';
+      plugin(verify => $SEEN, smoke => $SEEN)->after_build({ build_root => "$root" });
+      my $want_v = defined $p5 ? "PERL5LIB:unset DZIL_BINARY_PERL5LIB:set=$p5" : "PERL5LIB:unset DZIL_BINARY_PERL5LIB:set=";
+      is_deeply [ split /\n/, $log->slurp ], [ $want_v, 'PERL5LIB:unset DZIL_BINARY_PERL5LIB:unset=' ],
+        "$label: verify gets DZIL_BINARY_PERL5LIB (the caller's PERL5LIB, empty without) and no PERL5LIB; smoke gets neither, a stale value included";
+      is $ENV{PERL5LIB}, $p5, "$label: PERL5LIB is restored";
+      is $ENV{DZIL_BINARY_PERL5LIB}, 'stale-from-caller', "$label: DZIL_BINARY_PERL5LIB is restored";
+    }
+  }
+};
+
 done_testing;

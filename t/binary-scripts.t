@@ -1013,8 +1013,9 @@ SH
 # cannot be removed or made unreadable under the test's feet portably.
 
 # --- win-dlls.pl and the lib-gate.pl split it uses -------------------------
-# build-leg.sh (which calls win-dlls.pl on the Windows leg only) has no harness:
-# it is covered only by the controller's Windows probe.
+# build-leg.sh (which calls win-dlls.pl on the Windows leg only) has a harness for its
+# verify phase only (below, k32); the other phases and the Windows leg are covered only
+# by the controller's probes.
 
 { # foreign(): the distinct names violations() flags, sorted, case-insensitive on packed
   my %links = (a => ['x.dll', 'KERNEL32.dll'], b => ['x.dll', 'y.dll']);
@@ -1195,6 +1196,79 @@ sub win_fixture {
   isnt($rc, 0, 'libgate_no_perl_lib: a start that extracts no perl library fails');
   like($out, qr/\APAR cache after the start: 0 object\(s\)\n/, 'libgate_no_perl_lib: the cache listing is on STDOUT first');
   like($err, qr/extracted no perl library/, 'libgate_no_perl_lib: and the die names why');
+}
+
+# --- build-leg.sh verify: the hook's environment (k32) -----------------------
+# A faked leg: HOME holds dzil-binary/perl/bin/perl (a link to this perl) and the
+# local lib with Fake::Dep; the workspace holds dist/META.json and the packed out/.
+# The caller's environment carries PERL5LIB, the local::lib variables and a stale
+# DZIL_BINARY_PERL5LIB, as the workflow's earlier steps leave them.
+SKIP: {
+  my ($bash) = grep { -x $_ } map { File::Spec->catfile($_, 'bash') } grep { length } File::Spec->path;
+  skip 'no bash on PATH', 9 unless $bash;
+
+  my $leg   = tempdir(CLEANUP => 1);
+  my $home  = "$leg/home";
+  my $ws    = "$leg/ws";
+  my $local = "$home/dzil-binary/local/lib/perl5";
+  spew("$local/Fake/Dep.pm", "package Fake::Dep; 1;\n");
+  spew("$leg/caller-lib/Caller/Only.pm", "package Caller::Only; 1;\n");
+  require File::Path; File::Path::make_path("$home/dzil-binary/perl/bin");
+  symlink $^X, "$home/dzil-binary/perl/bin/perl" or die "symlink: $!";
+  spew("$ws/dist/META.json", JSON::PP->new->encode({
+    name => 'Fake-Dist',
+    x_binaries => { platforms => ['linux-x86_64'], binaries => {
+      foo => { script => 'bin/foo', verify => 'sh scripts/verify.sh' },
+      bar => { script => 'bin/bar' },
+    } },
+  }));
+  spew("$ws/dist/scripts/verify.sh", <<'SH');
+set -u
+{
+  printf 'arg=%s\n' "$1"
+  printf 'PERL5LIB=%s\n' "${PERL5LIB-<unset>}"
+  printf 'DZIL_BINARY_PERL5LIB=%s\n' "$DZIL_BINARY_PERL5LIB"
+  printf 'PERL_LOCAL_LIB_ROOT=%s\n' "${PERL_LOCAL_LIB_ROOT-<unset>}"
+  printf 'PERL_MB_OPT=%s\n' "${PERL_MB_OPT-<unset>}"
+  printf 'PERL_MM_OPT=%s\n' "${PERL_MM_OPT-<unset>}"
+  printf 'perl=%s\n' "$(command -v perl)"
+  if perl -MFake::Dep -e1 2>/dev/null; then echo 'bare=loads'; else echo 'bare=fails'; fi
+  if perl -MCaller::Only -e1 2>/dev/null; then echo 'caller=loads'; else echo 'caller=fails'; fi
+  PERL5LIB=$DZIL_BINARY_PERL5LIB perl -MFake::Dep -e 'print "withlib=$INC{q{Fake/Dep.pm}}\n"'
+} > "$HOOK_OUT"
+SH
+  spew("$ws/out/foo-1.0-linux-x86_64", "x");
+
+  my ($o, $e) = ("$leg/stdout", "$leg/stderr");
+  my $pid = fork // die "fork: $!";
+  if (!$pid) {
+    chdir $ws or die;
+    $ENV{HOME} = $home; $ENV{PLATFORM} = 'linux-x86_64'; $ENV{VERSION} = '1.0';
+    $ENV{HOOK_OUT} = "$leg/hook.out";
+    $ENV{PERL5LIB} = "$leg/caller-lib";
+    $ENV{PERL_LOCAL_LIB_ROOT} = '/caller/root';
+    $ENV{PERL_MB_OPT} = '--caller-mb';
+    $ENV{PERL_MM_OPT} = 'CALLER_MM=1';
+    $ENV{DZIL_BINARY_PERL5LIB} = 'stale-from-caller';
+    open STDOUT, '>', $o or die; open STDERR, '>', $e or die;
+    exec $bash, script('build-leg.sh'), 'verify' or die "exec: $!";
+  }
+  waitpid $pid, 0;
+  my ($rc, $out, $err) = ($? >> 8, slurp($o), slurp($e));
+  is($rc, 0, 'leg_verify: build-leg.sh verify succeeds with a set -u hook reading DZIL_BINARY_PERL5LIB')
+    or diag "stdout: $out\nstderr: $err";
+  my %h = map { /\A([^=]+)=(.*)\z/ ? ($1 => $2) : () } split /\n/, (-e "$leg/hook.out" ? slurp("$leg/hook.out") : '');
+  is($h{arg}, "$ws/out/foo-1.0-linux-x86_64", 'leg_verify: the hook gets the packed binary as its argument');
+  is($h{PERL5LIB}, '<unset>', 'leg_verify: PERL5LIB is not in the hook environment');
+  is_deeply([@h{qw( PERL_LOCAL_LIB_ROOT PERL_MB_OPT PERL_MM_OPT )}], [('<unset>') x 3],
+    'leg_verify: the local::lib variables are not in the hook environment');
+  is($h{DZIL_BINARY_PERL5LIB}, $local,
+    'leg_verify: DZIL_BINARY_PERL5LIB is the local lib, not the caller\'s stale value');
+  is($h{perl}, "$home/dzil-binary/perl/bin/perl", 'leg_verify: perl in the hook is the leg\'s packing perl');
+  is_deeply([@h{qw( bare caller )}], ['fails', 'fails'],
+    'leg_verify: a bare perl loads neither the local lib nor the caller\'s PERL5LIB');
+  is($h{withlib}, "$local/Fake/Dep.pm", 'leg_verify: PERL5LIB=$DZIL_BINARY_PERL5LIB perl loads Fake::Dep from the local lib');
+  like($out, qr/^::notice::bar: x_binaries declares no verify$/m, 'leg_verify: a binary without verify gets the ::notice:: line');
 }
 
 done_testing;

@@ -16,6 +16,10 @@
 # ~/dzil-binary holds what the workflow caches: perl/ (the packing perl; Windows
 # packs with Strawberry), local/ (the deps local lib), prepare/ (prepare's cache dir).
 # A hook from x_binaries runs from the dist root as  sh -c '<cmd> "$@"' sh <arg>.
+# verify's hook runs with the packing perl first on PATH, without PERL5LIB and
+# the other local::lib variables, and with DZIL_BINARY_PERL5LIB set to the
+# local lib (local/lib/perl5), the PERL5LIB under which the packing perl loads
+# the dist's dependencies.
 set -euo pipefail
 
 die() { echo "::error::$*"; exit 1; }
@@ -248,9 +252,13 @@ pack() {
   emit artifact "$dist-$VERSION-$PLATFORM"
 }
 
+# The binary under test sees no local lib; the hook gets it in
+# DZIL_BINARY_PERL5LIB, the PERL5LIB that `leg_env lib` sets (Windows: the
+# C:/... form Strawberry perl takes).
 verify() {
   local name cmd
   leg_env
+  export DZIL_BINARY_PERL5LIB=$LOCAL/lib/perl5
   names
   for name in "${NAMES[@]}"; do
     cmd=$(meta verify "$name")

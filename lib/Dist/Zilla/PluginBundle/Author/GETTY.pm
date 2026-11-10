@@ -1278,7 +1278,9 @@ which the build checks (C<$GLIBC_FLOOR> in F<.github/dzil-binary/lib-gate.pl>).
 Packing runs again at C<dzil build> as a local check, which needs C<pp> in the
 C<PATH> (L<PAR::Packer>) and fails the build without it. Set the environment
 variable C<DZIL_BINARY_SKIP> to a true value to skip that local check,
-including C<binary_verify> and C<binary_smoke>.
+including C<binary_verify> and C<binary_smoke>. As in the workflow, neither
+sees C<PERL5LIB> in the local check, and C<binary_verify> gets the caller's in
+C<DZIL_BINARY_PERL5LIB>.
 
 =head2 binary
 
@@ -1320,6 +1322,13 @@ subsections.
 
 A shell command run in the distribution root after packing, with the path of
 the binary appended as its argument. A failing exit status fails the build.
+It runs without C<PERL5LIB>, so the binary under test finds no module outside
+itself, and gets in C<DZIL_BINARY_PERL5LIB> the C<PERL5LIB> under which the
+packing perl loads the distribution's dependencies: in the workflow the build
+leg's local lib, with the packing perl first in the C<PATH>; in the local check
+the caller's C<PERL5LIB>, empty without one. A verify that compares the binary
+with its script runs that perl as
+C<PERL5LIB=$DZIL_BINARY_PERL5LIB perl -Ilib bin/foo>.
 Default: none, the workflow then notes that no verify is declared. Inherited by
 subsections.
 
@@ -1328,8 +1337,9 @@ subsections.
 A shell command like C<binary_verify>, which the workflow runs on every
 platform on a clean machine without Perl (Linux inside the images AlmaLinux 8
 and 9 and Debian bookworm slim, macOS and Windows on the runner as it is),
-with the binary as its argument. Default: none, the binary is then not
-smoke tested. Inherited by subsections.
+with the binary as its argument. It runs without C<PERL5LIB> and without
+C<DZIL_BINARY_PERL5LIB>, in the local check too. Default: none, the binary is
+then not smoke tested. Inherited by subsections.
 
 =head2 binary_prepare
 

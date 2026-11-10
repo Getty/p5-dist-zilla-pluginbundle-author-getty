@@ -53,13 +53,20 @@
   - A dist with "binary" keys now packs each declared binary with pp during
     "dzil build" and runs its verify and smoke commands on the result, so a
     broken binary already fails the local build. When pp cannot be started,
-    the build names the reason. "dzil
-    release" requires .github/workflows/binaries.yml calling the shared
-    dzil-binary.yml and dies without it. The dzil-test action sets
-    DZIL_BINARY_SKIP=1, so CI builds skip the pp step. On native Windows the
-    local pp step starts pp with the building perl, writes the binary as
-    NAME.exe and hands binary_pp_args and the verify and smoke commands to sh
-    unchanged. Dists without "binary" keys are unchanged.
+    the build names the reason. "dzil release" requires
+    .github/workflows/binaries.yml calling the shared dzil-binary.yml and
+    dies without it. The dzil-test action sets DZIL_BINARY_SKIP=1, so CI
+    builds skip the pp step. On native Windows the local pp step starts pp
+    with the building perl, writes the binary as NAME.exe and hands
+    binary_pp_args and the verify and smoke commands to sh unchanged. The
+    verify commands run without PERL5LIB, so the binary under test does not
+    see the libraries of its dependencies, and get the PERL5LIB value under
+    which the dependencies load as DZIL_BINARY_PERL5LIB (in the CI leg the
+    local lib of the dependencies, in the local check the PERL5LIB of the
+    caller, empty when there is none); a verify command that needs a perl
+    loading the dist's modules runs "PERL5LIB=$DZIL_BINARY_PERL5LIB perl
+    -Ilib ...". The smoke commands run without either variable. Dists
+    without "binary" keys are unchanged.
 
   - Build-leg helper scripts for the shared binary release workflow live in
     .github/dzil-binary (plan.pl, pp-args.pl, require-gate.pl, lib-gate.pl,
