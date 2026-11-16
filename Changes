@@ -1,5 +1,8 @@
 {{$NEXT}}
 
+  - Requires CPAN::Meta::Merge 2.150005, so a dist with several
+    binaries merges its x_binaries on older perls too.
+
   - "run_if_trial_<phase>" runs its command only on a trial build or
     release, "run_no_trial_<phase>" only when it is not a trial,
     "run_if_release_<phase>" only during "dzil release" and

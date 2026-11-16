@@ -1,6 +1,7 @@
 requires 'perl', '5.022';
 
 requires 'App::cpanminus', '1.7049';
+requires 'CPAN::Meta::Merge', '2.150005';
 requires 'Config::Identity', '0.0019';
 requires 'Dist::Zilla', '6.040';
 requires 'Dist::Zilla::Plugin::Alien', '0.024';

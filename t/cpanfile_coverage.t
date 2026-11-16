@@ -345,6 +345,7 @@ for my $d (@DEMANDS) {
 # Requirements that nothing loads by name.
 my %NO_LOADER = (
   'perl'          => 'the minimum perl, not a module',
+  'CPAN::Meta::Merge' => 'Dist::Zilla merges the x_binaries of several [Author::GETTY::Binary] instances with it; only 2.150005+ merges nested hashes (perl 5.22 ships 2.150001)',
   'App::cpanminus' => 'the default installrelease_command is `cpanm .`: InstallRelease runs it as a command',
 );
 
