@@ -8,7 +8,7 @@ requires 'Dist::Zilla::Plugin::Alien', '0.024';
 requires 'Dist::Zilla::Plugin::AlienBuild', '0.33';
 requires 'Dist::Zilla::Plugin::Authority', '1.009';
 requires 'Dist::Zilla::Plugin::Deprecated', '0.007';
-requires 'Dist::Zilla::Plugin::Docker::API', '0.105';
+requires 'Dist::Zilla::Plugin::Docker::API', '0.106';
 requires 'Dist::Zilla::Plugin::GatherAgentContext', '0.002';
 requires 'Dist::Zilla::Plugin::Git::CheckFor::CorrectBranch', '0.015';
 requires 'Dist::Zilla::Plugin::GitHub::CreateRelease', '0.0012';
