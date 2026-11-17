@@ -268,8 +268,10 @@ packs_scenario('plain');
   my $enoent = do { local $! = 2; "$!" };
   like $err // '', qr/cannot run pp for binary foo: \Q$enoent\E/,
     'unstartable_pp: the build dies with "cannot run pp for binary foo: <reason from $!>"';
-  unlike $err // '', qr/exit|pp failed/, 'unstartable_pp: no exit code in the message';
-  unlike $err // '', qr/\d{6,}/, 'unstartable_pp: no bogus exit code number';
+  # the message without its " at FILE line N" tail: a smoker's path may hold long numbers
+  my $msg = ( $err // '' ) =~ s/ at .*//sr;
+  unlike $msg, qr/exit|pp failed/, 'unstartable_pp: no exit code in the message';
+  unlike $msg, qr/\d{6,}/, 'unstartable_pp: no bogus exit code number';
 }
 
 # pp runs and fails: the exit code is named
