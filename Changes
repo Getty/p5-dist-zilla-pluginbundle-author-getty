@@ -120,8 +120,8 @@
     fails on an empty list of expected binaries. .gitattributes keeps
     .github/dzil-binary at LF line endings on every checkout. Archive::Zip
     is a test requirement.
-  - Requires Dist::Zilla::Plugin::Docker::API 0.106 and with it API::Docker
-    0.005: when the engine rejects an image build before it has read the
+  - Requires Dist::Zilla::Plugin::Docker::API 0.107 and with it API::Docker
+    0.006: when the engine rejects an image build before it has read the
     whole context, the release stops with the engine's error message.
 
 0.327     2026-10-26 00:40:01Z
