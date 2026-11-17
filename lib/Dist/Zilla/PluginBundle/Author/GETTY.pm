@@ -82,6 +82,11 @@ In default configuration it is equivalent to:
   -remove = GatherDir
   -remove = PruneCruft
   -remove = License ; LICENSE is committed, see generate_license
+  -remove = ConfirmRelease ; comes back behind InstallCheck
+
+  [Author::GETTY::InstallCheck] ; cpanm --test-only on the tarball, before the upload;
+                                ; not with no_installrelease or Alien
+  [ConfirmRelease]
 
   [LicenseFile]     ; checks the committed LICENSE against dist.ini
 
@@ -485,7 +490,9 @@ this flag.
 =head2 no_installrelease
 
 By default, this bundle will install your distribution after the release. If
-you set this attribute to 1, then this will not happen. See
+you set this attribute to 1, then this will not happen, and neither does the
+install test before the upload
+(L<Dist::Zilla::Plugin::Author::GETTY::InstallCheck>). See
 L<Dist::Zilla::Plugin::InstallRelease>.
 
 If you use the L<Dist::Zilla::Plugin::Alien> options, then this one will not
@@ -1509,6 +1516,10 @@ sub configure {
   $self->add_plugins('GatherAgentContext');
 
   my @removes = ('GatherDir','PruneCruft');
+  # ConfirmRelease is always added again further down (behind InstallCheck, or
+  # on its own), so the Filter drops the one @Basic carries.
+  my $install_check = !($self->no_installrelease || $self->is_alien);
+  push @removes, 'ConfirmRelease';
   if ($self->no_cpan || $self->no_makemaker) {
     push @removes, 'UploadToCPAN' if $self->no_cpan;
     push @removes, 'MakeMaker' if $self->no_makemaker;
@@ -1522,6 +1533,11 @@ sub configure {
     -bundle => '@Basic',
     -remove => [@removes],
   });
+
+  # Test-install the tarball before the upload: after TestRelease, before the
+  # question whether to release. ConfirmRelease keeps its place either way.
+  $self->add_plugins('Author::GETTY::InstallCheck') if $install_check;
+  $self->add_plugins('ConfirmRelease');
 
   $self->add_plugins('LicenseFile') unless $self->generate_license || $self->no_license;
 

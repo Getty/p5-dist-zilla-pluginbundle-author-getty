@@ -1,5 +1,12 @@
 {{$NEXT}}
 
+  - The release test-installs the tarball with "cpanm --test-only" before
+    the upload (Author::GETTY::InstallCheck, between TestRelease and
+    ConfirmRelease): unpacked outside of the checkout, built from blib, with
+    RELEASE_TESTING and AUTHOR_TESTING off, like a user and a CPAN tester
+    see it. A failing install test aborts the release, so that nothing is
+    uploaded. "no_installrelease" and the Alien options leave it out.
+
   - Requires CPAN::Meta::Merge 2.150005, so a dist with several
     binaries merges its x_binaries on older perls too.
 

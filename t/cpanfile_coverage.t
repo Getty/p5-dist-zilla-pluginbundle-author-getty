@@ -61,7 +61,7 @@ my %LISTED = (%RUN, %TEST);
 my %SIBLING = (
   # shipped in Dist::Zilla itself
   (map { ("Dist::Zilla::Plugin::$_" => 'Dist::Zilla') }
-    qw( AutoVersion FakeRelease MetaConfig MetaJSON MetaResources NextRelease PkgVersion PodSyntaxTests )),
+    qw( AutoVersion ConfirmRelease FakeRelease MetaConfig MetaJSON MetaResources NextRelease PkgVersion PodSyntaxTests )),
   'Dist::Zilla::PluginBundle::Basic'  => 'Dist::Zilla',
   'Dist::Zilla::PluginBundle::Filter' => 'Dist::Zilla',
   # Dist-Zilla-Plugin-Git ships these and @Git
@@ -213,7 +213,7 @@ for my $path (@PATHS) {
 
 # The paths have to have been walked, or the test checks nothing.
 for my $expected (qw(
-  Dist::Zilla::Plugin::GithubMeta Dist::Zilla::Plugin::Repository Dist::Zilla::Plugin::Author::GETTY::GiteaMeta
+  Dist::Zilla::Plugin::GithubMeta Dist::Zilla::Plugin::Repository Dist::Zilla::Plugin::Author::GETTY::GiteaMeta Dist::Zilla::Plugin::Author::GETTY::InstallCheck
   Dist::Zilla::Plugin::Alien Dist::Zilla::Plugin::AlienBuild Dist::Zilla::Plugin::MakeMaker::Awesome
   Dist::Zilla::Plugin::MakeMaker::SkipInstall Dist::Zilla::Plugin::ModuleBuildTiny Dist::Zilla::Plugin::Deprecated
   Dist::Zilla::Plugin::TaskWeaver Dist::Zilla::Plugin::AutoVersion Dist::Zilla::Plugin::FakeRelease
