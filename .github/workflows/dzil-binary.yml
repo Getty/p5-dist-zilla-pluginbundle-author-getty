@@ -108,13 +108,14 @@ jobs:
             echo "::error::want exactly one dist tarball, found: $*"
             exit 1
           fi
-          mkdir src
-          tar xzf "$1" -C src --strip-components=1
-          perl .dzil-binary/.github/dzil-binary/plan.pl src/META.json | tee -a "$GITHUB_OUTPUT"
+          dist_src=$RUNNER_TEMP/dist-src
+          mkdir "$dist_src"
+          tar xzf "$1" -C "$dist_src" --strip-components=1
+          perl .dzil-binary/.github/dzil-binary/plan.pl "$dist_src/META.json" | tee -a "$GITHUB_OUTPUT"
           version=$(perl -MJSON::PP -e '
             open my $fh, "<:raw", $ARGV[0] or die "cannot read $ARGV[0]: $!\n";
             print JSON::PP->new->decode(do { local $/; <$fh> })->{version} // "";
-          ' src/META.json)
+          ' "$dist_src/META.json")
           [ -n "$version" ] || { echo "::error::META.json has no version"; exit 1; }
           if [ -n "$TAG" ]; then
             case $TAG in
@@ -137,7 +138,7 @@ jobs:
             die "x_binaries has no binaries\n" unless ref $bins eq "HASH" && %$bins;
             my @b = map { { name => $_, defined $bins->{$_}{smoke} ? (smoke => $bins->{$_}{smoke}) : () } } sort keys %$bins;
             print "binaries=", JSON::PP->new->canonical->encode(\@b), "\n";
-          ' src/META.json | tee -a "$GITHUB_OUTPUT"
+          ' "$dist_src/META.json" | tee -a "$GITHUB_OUTPUT"
       - name: Keep the tarball for the legs
         uses: actions/upload-artifact@v7
         with:
@@ -395,8 +396,9 @@ jobs:
         run: |
           set -euo pipefail
           p=.dzil-binary/.github/dzil-binary/publish.pl
-          mkdir src
-          tar xzf tarball/*.tar.gz -C src --strip-components=1
+          dist_src=$RUNNER_TEMP/dist-src
+          mkdir "$dist_src"
+          tar xzf tarball/*.tar.gz -C "$dist_src" --strip-components=1
           gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" >release.json
           # only a 404 means "no latest release yet" (an empty file); any other failure stops here
           if ! gh api "repos/$GITHUB_REPOSITORY/releases/latest" >latest.json 2>latest.err; then
@@ -404,10 +406,10 @@ jobs:
             grep -Eq '\(HTTP 404\)$|^gh: HTTP 404$' latest.err || { echo "::error::cannot read releases/latest"; exit 1; }
             : >latest.json
           fi
-          latest=$(perl "$p" check src/META.json "$VERSION" assets release.json latest.json)
+          latest=$(perl "$p" check "$dist_src/META.json" "$VERSION" assets release.json latest.json)
           perl "$p" sums assets
-          perl "$p" render src/META.json "${GITHUB_REPOSITORY%%/*}" "${GITHUB_REPOSITORY#*/}" "$TAG" assets
-          list=$(perl "$p" expected src/META.json "$VERSION")
+          perl "$p" render "$dist_src/META.json" "${GITHUB_REPOSITORY%%/*}" "${GITHUB_REPOSITORY#*/}" "$TAG" assets
+          list=$(perl "$p" expected "$dist_src/META.json" "$VERSION")
           [ -n "$list" ] || { echo "::error::publish.pl expected listed no binaries"; exit 1; }
           files=()
           while IFS= read -r name; do files+=("assets/$name"); done <<<"$list"

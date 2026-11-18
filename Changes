@@ -1,5 +1,9 @@
 {{$NEXT}}
 
+  - The binary release workflow unpacks the dist tarball below
+    $RUNNER_TEMP instead of "src" in the workspace, so a dist that has its
+    own "src" directory at the root runs the probe and the release too.
+
 0.328     2026-11-18 03:01:44Z
 
   - The release test-installs the tarball with "cpanm --test-only" before
