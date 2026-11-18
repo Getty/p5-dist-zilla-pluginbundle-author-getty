@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.328     2026-11-18 03:01:44Z
 
   - The release test-installs the tarball with "cpanm --test-only" before
     the upload (Author::GETTY::InstallCheck, between TestRelease and
