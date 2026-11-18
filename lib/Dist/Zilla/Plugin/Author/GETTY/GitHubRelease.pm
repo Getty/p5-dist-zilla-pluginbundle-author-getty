@@ -6,7 +6,7 @@ extends 'Dist::Zilla::Plugin::GitHub::CreateRelease';
 use Config::Identity;
 use Pithub::Repos::Releases;
 
-our $VERSION = '0.328';
+our $VERSION = '0.329';
 
 =head1 DESCRIPTION
 

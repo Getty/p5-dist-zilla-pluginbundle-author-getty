@@ -1,6 +1,6 @@
 package Dist::Zilla::PluginBundle::Author::GETTY::Binary;
 # ABSTRACT: Standalone binary subsection for @Author::GETTY
-our $VERSION = '0.328';
+our $VERSION = '0.329';
 use Moose;
 with 'Dist::Zilla::Role::PluginBundle::Easy';
 
