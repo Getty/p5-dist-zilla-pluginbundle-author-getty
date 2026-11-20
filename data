@@ -1,0 +1,31 @@
+---
+class: standard
+completed: 2026-11-20T16:57:47Z
+created: 2026-11-18T02:35:08Z
+id: 33
+priority: high
+started: 2026-11-20T16:57:47Z
+status: done
+tags:
+- binary
+- release
+- provenance
+title: Persist binary build provenance manifest
+updated: 2026-11-20T16:57:47Z
+---
+
+The reusable dzil-binary workflow records asset hashes only for releases and does not persist the full source commit, resolved workflow commit, actual runner image/version, OS/arch/ABI and probe hashes together. Add a machine-readable provenance artifact for probe and release runs so briefing k7 can verify its approved standalone-binary trust contract. Do not publish or retag without separate maintainer authorization.
+
+From briefing k7 Task 7 review (2026-11-18): (1) dzil-binary.yml declares input bundle_ref with default binary-v1 and checks out its scripts (plan.pl, build-leg.sh, build-perl.sh, publish.pl) at that ref, so a caller that pins uses: ...@<sha> still runs mutable-tag code unless it also passes bundle_ref: <same sha>. briefing will pass it explicitly; consider defaulting bundle_ref to the called workflow's own commit. (2) The Linux smoke runs inside docker run with only SMOKE/BIN in the environment, so GITHUB_SHA, ImageOS/ImageVersion and RUNNER_* are not visible to the smoke script; a provenance manifest has to be written by the workflow (outside the container) from the run context.
+
+Maintainer decisions 2026-11-20: (1) release runs persist the manifest both as a run artifact and as a release asset provenance.json (not listed in SHA256SUMS, so briefing's pin import is unaffected); probe runs as artifact only. (2) bundle_ref defaults to the called workflow's own commit, resolved once in the plan job from the run record (referenced_workflows) and handed to every job; an explicit bundle_ref still wins; an unresolvable commit fails the run loudly, no silent fallback to binary-v1. Sequenced after k34 (same files).
+
+Design round 2026-11-20 (worker, read-only; design doc handed to test-writer/worker). Maintainer decisions: D1 the workflow commit comes from job.workflow_sha (GitHub, 2026-09), not the run record — no new permissions for callers, empty value fails loudly; bundle_ref default becomes '' = that commit, pinned once in plan (bundle_commit output) and used by every other job; guard: job.workflow_repository must be Getty/p5-dist-zilla-pluginbundle-author-getty. D2 strict: new provenance job (probe + release) merges per-job key=value parts (facts.sh, build-leg.sh provenance) via provenance.pl, cross-checks all hashes/commits; publish needs it, verifies the manifest against SHA256SUMS and uploads provenance.json; runner image facts required on host jobs, null allowed in container build legs. Artifact names provenance.plan / provenance.build.<platform> / provenance.smoke.<n> / <dist>-<version>.provenance avoid every download pattern.
+
+test-writer: RED tests written (t/binary-provenance.t new, t/binary-publish.t +2 guards green, t/binary-workflow.t k33 counts/structure/resolve-step). Fail today for missing facts.sh/provenance.pl/provenance job; uncommitted.
+
+worker: read design + RED tests (binary-provenance 195/253 red, binary-workflow 52/98 red). Implementing facts.sh, provenance.pl, build-leg.sh provenance, workflow (resolve/pin, provenance job, publish verify+upload), POD.
+
+worker done, tree commit-ready (uncommitted). New: .github/dzil-binary/facts.sh (POSIX sh: machine/plan/smoke), .github/dzil-binary/provenance.pl (merge/verify/artifact, core modules only). Changed: build-leg.sh (+provenance phase), dzil-binary.yml (resolve+pin in plan, bundle_commit output used by all jobs, bundle_ref default '', per-job parts, new provenance job, publish needs it + verify + uploads provenance.json), GETTY.pm Binaries POD. git add -N on facts.sh, provenance.pl, t/binary-provenance.t (.github ships in the dist; release-manager must git add them). Verified: the 3 binary tests 591/591 green; prove -lr t/ 41 files 1754 tests PASS, no skips; YAML::XS + PyYAML parse; sh -n facts.sh, bash -n build-leg.sh, perl -c provenance.pl OK; dzil build exit 0, MANIFEST has the new files, binary tests green inside the built dist; e2e run with the real writers feeding merge/verify passes. Deviations: build+smoke pass BUNDLE_COMMIT from steps.bundle.outputs.commit (measured); merge also refuses a part missing a key and non-printable-ASCII values; unsmoked smoke parts carry no image (per tests), so they match any free cell of the same binary/platform/runner. Design conflict to decide: an explicit bundle_ref does NOT rescue an empty job.workflow_sha (merge 4 requires a 40-hex workflow_commit, so facts.sh plan needs WORKFLOW_SHA). Implemented the strict version. Not verifiable here: real-runner behaviour (Windows sh/cmd ver, macOS sw_vers, ImageOS in containers, checkout commit output in container legs); the first probe will show it.
+
+Committed as 0cc7935
