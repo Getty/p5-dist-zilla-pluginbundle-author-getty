@@ -28,6 +28,12 @@
     scripts match the workflow that calls them; an explicit bundle_ref
     still wins. Callers need no new permissions.
 
+  - The binary release workflow's pre-upload check refuses a release that
+    already holds SHA256SUMS, install.sh, install.ps1 or provenance.json,
+    not only one of the binaries, so a re-run stops before uploading
+    anything instead of failing halfway on a duplicate name. Nothing is
+    overwritten, so a published SHA256SUMS stays the one users pinned.
+
 0.328     2026-11-18 03:01:44Z
 
   - The release test-installs the tarball with "cpanm --test-only" before
