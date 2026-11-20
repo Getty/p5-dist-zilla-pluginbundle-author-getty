@@ -1,0 +1,30 @@
+---
+class: standard
+completed: 2026-11-20T16:03:40Z
+created: 2026-11-20T15:41:01Z
+id: 35
+priority: high
+started: 2026-11-20T15:44:29Z
+status: done
+tags:
+- versioning
+- release
+title: Post-release commit leaves a bumped script/ executable uncommitted
+updated: 2026-11-20T16:03:45Z
+---
+
+The post-release commit only allows `^lib/.*\.pm$` (the @Git::VersionManager default) plus the bundle's `^bin/` (GETTY.pm, `post-release commit.allow_dirty_match`). A dist that installs its program from another directory via `[ExecDir] dir = script` gets that file into :PerlExecFiles, so BumpVersionAfterRelease rewrites its $VERSION, but the post-release Git::Commit does not commit it: the bump stays as an uncommitted change, history falls one version behind, and the next release trips over the dirty tree. `commit_files_after_release` feeds only the pre-tag release commit, and the bundle has no config slicing, so a dist cannot fix it in dist.ini.
+
+Found in briefing (App-Briefing 0.006000, briefing card k41): its bin/ belongs to the Claude Code plugin, so the CPAN program lives in script/ with [ExecDir] dir = script.
+
+Possible fix: derive the extra allow_dirty_match from the ExecDir directory (or also allow `^script/`). Maintainer wants this fixed and released before the App-Briefing release.
+
+Maintainer said to work the open cards (2026-11-20). Plan: test-writer RED in t/post_release_commit.t, worker adds ^script/ to the post-release commit's allow_dirty_match (+POD), release-manager commits. Release itself stays behind the publish gate.
+
+test-writer: t/post_release_commit.t now expects allow_dirty_match bin then script, plus matching assertions (script/briefing yes, t/foo.t and README.md no). RED, 3 of 14 fail, only for the missing script rule.
+
+worker: configure() now passes post-release commit.allow_dirty_match = [ ^bin/, ^script/ ] to @Git::VersionManager (GETTY.pm, comment says why: configure() cannot see a dist's own [ExecDir]). POD updated in both places that describe it: the 'equivalent to' listing and the commit_files_after_release section. No new attribute, no ExecDir derivation. Verified: prove -lr t/post_release_commit.t 14/14 (was 3/14 RED); prove -lr t/ 39/40 files ok, only t/binary-workflow.t fails 11/22 (k34's RED, not touched); no file skipped; dzil build exit 0, woven POD podchecker OK. Changes not touched (release-manager owns it). Drift for the skill source board (getty-perl-release-author-getty, skilletor-managed): its 'Executables belong in bin/, never script/' bullet is still right for the default, but could mention that [ExecDir] dir = script now gets its post-release bump committed too.
+
+Ready for review: ^script/ added to the post-release commit's allow_dirty_match (+ code comment, + POD in two places). Tree commit-ready, only lib/Dist/Zilla/PluginBundle/Author/GETTY.pm changed by the worker; t/post_release_commit.t is the test-writer's RED, now green. Release-manager to add the Changes entry and commit.
+
+Committed as a645f14
