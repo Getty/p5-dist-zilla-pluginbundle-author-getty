@@ -3,7 +3,7 @@ package Dist::Zilla::Plugin::Author::GETTY::InstallCheck;
 use Moose;
 with 'Dist::Zilla::Role::BeforeRelease';
 
-our $VERSION = '0.329';
+our $VERSION = '0.330';
 
 =head1 DESCRIPTION
 

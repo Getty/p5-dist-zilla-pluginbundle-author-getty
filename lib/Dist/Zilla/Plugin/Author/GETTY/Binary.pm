@@ -1,6 +1,6 @@
 package Dist::Zilla::Plugin::Author::GETTY::Binary;
 # ABSTRACT: Declare one standalone binary of the distribution in META.json
-our $VERSION = '0.329';
+our $VERSION = '0.330';
 use Moose;
 with 'Dist::Zilla::Role::MetaProvider',
      'Dist::Zilla::Role::AfterBuild',

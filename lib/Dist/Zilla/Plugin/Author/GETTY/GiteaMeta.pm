@@ -4,7 +4,7 @@ use Moose;
 use File::Spec;
 with 'Dist::Zilla::Role::MetaProvider';
 
-our $VERSION = '0.329';
+our $VERSION = '0.330';
 
 =head1 DESCRIPTION
 

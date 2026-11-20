@@ -1,6 +1,6 @@
 package Pod::Weaver::Section::Author::GETTY::Legal;
 # ABSTRACT: Copyright and license section with a link to the author's site
-our $VERSION = '0.329';
+our $VERSION = '0.330';
 use Moose;
 extends 'Pod::Weaver::Section::Legal';
 

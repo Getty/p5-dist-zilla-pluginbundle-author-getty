@@ -1,6 +1,6 @@
 package Dist::Zilla::PluginBundle::Author::GETTY;
 # ABSTRACT: BeLike::GETTY when you build your dists
-our $VERSION = '0.329';
+our $VERSION = '0.330';
 use Moose;
 use Dist::Zilla;
 use File::Spec;
