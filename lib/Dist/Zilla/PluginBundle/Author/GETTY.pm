@@ -1258,9 +1258,29 @@ F<.github/workflows/binaries.yml>, which has to exist before C<dzil release>
 
 A published release builds from the release's CPAN tarball and attaches, per
 binary and platform, C<NAME-VERSION-PLATFORM> (C<.exe> on Windows), plus
-F<SHA256SUMS>, F<install.sh> and F<install.ps1>. Started by hand with an empty
-C<tag>, the workflow is a probe run: it builds the checked-out commit and keeps
-the result as workflow artifacts, touching no release.
+F<SHA256SUMS>, F<install.sh>, F<install.ps1> and F<provenance.json>. Started by
+hand with an empty C<tag>, the workflow is a probe run: it builds the
+checked-out commit and keeps the result as workflow artifacts, touching no
+release.
+
+F<provenance.json> is the build's provenance manifest: the source commit (for
+a release the commit its tag ends at), the commit of the workflow and of the
+scripts it ran, the run, the dist tarball and the hash of every binary, and
+per build leg and smoke run the runner, its image, the machine (OS,
+architecture, libc or kernel ABI), the container image smoked in and the
+packing perl and L<PAR::Packer>. Before it is written, what the plan, the
+build legs and the smoke runs recorded is checked against the build plan, the
+binaries and each other, and a failed check stops the release; the release
+gets its assets only when the manifest matches F<SHA256SUMS>, which does not
+list the manifest. Every run, probe or release, keeps the manifest as the
+workflow artifact C<DIST-VERSION.provenance> (a probe's VERSION is C<probe->
+and seven hex digits of its commit).
+
+The workflow runs its scripts (F<.github/dzil-binary/> of this repository) from
+its own commit, the one the C<uses:> line resolves to, and pins that commit
+once for all of its jobs; the C<bundle_ref> input names another ref of this
+repository to run them from instead. The calling workflow needs no permission
+beyond the C<contents: write> shown above.
 
 Binaries are assets of the GitHub release, so C<binary> forces it: the bundle
 dies when C<no_github> or C<no_github_release> is set, or when no GitHub remote

@@ -245,4 +245,30 @@ sub check_latest {
   unlike(slurp($file), qr/tar\.gz|stray/, 'sums_cover_expected_only: no tarball or stray file line');
 }
 
+# --- provenance.json is never an asset of the checksums (k33) ------------------
+# The manifest rides along as a release asset beside SHA256SUMS but is not listed
+# in it, so a consumer that pins the sums is unaffected; and a release that holds
+# it already must not trip `check`.
+
+{ # sums_ignore_provenance
+  my $dl = dl_dir();
+  spew("$dl/provenance.json", "{}\n");
+  spew("$dl/Foo-Bar-1.0.provenance", "{}\n");
+  my ($rc, $out, $err) = run_script('sums', $dl);
+  is($rc, 0, 'sums_ignore_provenance: exit 0') or diag "$out$err";
+  my @lines = split /\n/, slurp("$dl/SHA256SUMS");
+  is_deeply([map { /\A\S+  (\S+)\z/ ? $1 : () } @lines], \@EXPECTED, 'sums_ignore_provenance: exactly the expected binaries');
+  unlike(slurp("$dl/SHA256SUMS"), qr/provenance/, 'sums_ignore_provenance: no provenance line in SHA256SUMS');
+}
+
+{ # check_with_existing_provenance: a release that already holds provenance.json is not "already has an asset"
+  my $d = tempdir(CLEANUP => 1);
+  my $dl = dl_dir();
+  spew("$dl/provenance.json", "{}\n");
+  my ($rc, $out, $err) = run_script('check', write_meta($d), '1.0', $dl,
+    release_json(0, 'Foo-Bar-1.0.tar.gz', 'provenance.json'), latest_json(undef));
+  is($rc, 0, 'check_with_existing_provenance: exit 0') or diag "$out$err";
+  like($out, qr/^latest=true$/m, 'check_with_existing_provenance: prints latest=true');
+}
+
 done_testing;

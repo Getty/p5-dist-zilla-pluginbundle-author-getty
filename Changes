@@ -13,6 +13,21 @@
     (dl/, tarball/, assets/, release.json, latest.json) below $RUNNER_TEMP
     as well, so a probe run no longer creates dl/ in the dist's checkout.
 
+  - The binary release workflow writes a provenance manifest,
+    provenance.json: the source commit (for a release the commit its tag
+    ends at), the workflow's and the scripts' commit, the run, the tarball
+    and binary hashes, and per build leg and smoke run the runner image,
+    machine, container image, packing perl and PAR::Packer. A new
+    provenance job cross-checks what every job recorded before a release
+    is touched. Every run keeps the manifest as the artifact
+    <dist>-<version>.provenance; a release also attaches it (not listed in
+    SHA256SUMS).
+
+  - The binary release workflow's "bundle_ref" input defaults to the
+    workflow's own commit (job.workflow_sha), pinned once per run, so the
+    scripts match the workflow that calls them; an explicit bundle_ref
+    still wins. Callers need no new permissions.
+
 0.328     2026-11-18 03:01:44Z
 
   - The release test-installs the tarball with "cpanm --test-only" before
