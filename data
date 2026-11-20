@@ -1,0 +1,45 @@
+{"action":"move","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"review","task_id":30,"ts":"2026-11-10T04:01:58Z"}
+{"action":"move","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"done","task_id":26,"ts":"2026-11-10T04:08:32Z"}
+{"action":"move","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"done","task_id":27,"ts":"2026-11-10T04:08:39Z"}
+{"action":"move","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"done","task_id":28,"ts":"2026-11-10T04:08:45Z"}
+{"action":"move","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"done","task_id":30,"ts":"2026-11-10T04:08:51Z"}
+{"action":"move","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"done","task_id":31,"ts":"2026-11-10T04:08:58Z"}
+{"action":"move","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"done","task_id":32,"ts":"2026-11-10T04:09:03Z"}
+{"action":"create","agent":"Torsten Raudssus","detail":"todo","task_id":33,"ts":"2026-11-18T02:35:08Z"}
+{"action":"edit","agent":"Torsten Raudssus","detail":"todo","task_id":33,"ts":"2026-11-18T03:33:03Z"}
+{"action":"create","agent":"Torsten Raudssus","detail":"backlog","task_id":34,"ts":"2026-11-18T04:03:01Z"}
+{"action":"create","agent":"Torsten Raudssus","detail":"backlog","task_id":35,"ts":"2026-11-20T15:41:01Z"}
+{"action":"move","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":35,"ts":"2026-11-20T15:44:29Z"}
+{"action":"edit","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":35,"ts":"2026-11-20T15:44:34Z"}
+{"action":"move","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":34,"ts":"2026-11-20T15:44:38Z"}
+{"action":"edit","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":34,"ts":"2026-11-20T15:44:43Z"}
+{"action":"edit","agent":"Torsten Raudssus","detail":"todo","task_id":33,"ts":"2026-11-20T15:46:01Z"}
+{"action":"edit","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":35,"ts":"2026-11-20T15:47:45Z"}
+{"action":"edit","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":34,"ts":"2026-11-20T15:50:42Z"}
+{"action":"edit","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":35,"ts":"2026-11-20T15:54:33Z"}
+{"action":"handoff","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"review","task_id":35,"ts":"2026-11-20T15:54:43Z"}
+{"action":"edit","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":34,"ts":"2026-11-20T15:59:58Z"}
+{"action":"handoff","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"review","task_id":34,"ts":"2026-11-20T16:00:07Z"}
+{"action":"edit","agent":"Torsten Raudssus","detail":"review","task_id":35,"ts":"2026-11-20T16:03:36Z"}
+{"action":"move","agent":"Torsten Raudssus","detail":"done","task_id":35,"ts":"2026-11-20T16:03:40Z"}
+{"action":"edit","agent":"Torsten Raudssus","detail":"done","task_id":35,"ts":"2026-11-20T16:03:45Z"}
+{"action":"edit","agent":"Torsten Raudssus","detail":"review","task_id":34,"ts":"2026-11-20T16:03:49Z"}
+{"action":"move","agent":"Torsten Raudssus","detail":"done","task_id":34,"ts":"2026-11-20T16:03:54Z"}
+{"action":"edit","agent":"Torsten Raudssus","detail":"done","task_id":34,"ts":"2026-11-20T16:03:59Z"}
+{"action":"move","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":33,"ts":"2026-11-20T16:22:32Z"}
+{"action":"edit","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":33,"ts":"2026-11-20T16:22:38Z"}
+{"action":"create","agent":"Torsten Raudssus","detail":"backlog","task_id":36,"ts":"2026-11-20T16:22:43Z"}
+{"action":"edit","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":33,"ts":"2026-11-20T16:34:28Z"}
+{"action":"edit","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":33,"ts":"2026-11-20T16:42:25Z"}
+{"action":"handoff","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"review","task_id":33,"ts":"2026-11-20T16:54:03Z"}
+{"action":"edit","agent":"Torsten Raudssus","detail":"review","task_id":33,"ts":"2026-11-20T16:57:37Z"}
+{"action":"edit","agent":"Torsten Raudssus","detail":"review","task_id":33,"ts":"2026-11-20T16:57:42Z"}
+{"action":"move","agent":"Torsten Raudssus","detail":"done","task_id":33,"ts":"2026-11-20T16:57:47Z"}
+{"action":"move","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":36,"ts":"2026-11-20T18:18:16Z"}
+{"action":"edit","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":36,"ts":"2026-11-20T18:18:21Z"}
+{"action":"edit","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":36,"ts":"2026-11-20T18:21:07Z"}
+{"action":"edit","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"in-progress","task_id":36,"ts":"2026-11-20T18:24:51Z"}
+{"action":"handoff","agent":"p5-dist-zilla-pluginbundle-author-getty","detail":"review","task_id":36,"ts":"2026-11-20T18:24:56Z"}
+{"action":"edit","agent":"Torsten Raudssus","detail":"review","task_id":36,"ts":"2026-11-20T18:28:17Z"}
+{"action":"move","agent":"Torsten Raudssus","detail":"done","task_id":36,"ts":"2026-11-20T18:28:21Z"}
+{"action":"edit","agent":"Torsten Raudssus","detail":"done","task_id":36,"ts":"2026-11-20T18:28:26Z"}
