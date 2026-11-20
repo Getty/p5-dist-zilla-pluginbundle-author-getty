@@ -30,4 +30,48 @@ unlike($yml, qr{^\s*mkdir\s+src\b}m, 'no mkdir of a workspace-level src');
 unlike($yml, qr{(?:\s|["'/])src/META\.json}, 'META.json is not read from src/');
 unlike($yml, qr{-C\s+"?src\b}, 'tar does not extract into src');
 
+# The plan and publish jobs' own scratch paths (dl/, tarball/, assets/,
+# release.json, latest.json, latest.err) sit in the same workspace, so they
+# live below $RUNNER_TEMP too (${{ runner.temp }} in `with: path:`, where shell
+# variables do not expand). build and smoke have an empty workspace and keep
+# their relative tarball/, bins/, dist/ and out/.
+my ($jobs_text) = $yml =~ /^jobs:\n(.*)\z/ms;
+my (undef, %job) = split /^  (\w+):\n/m, $jobs_text;
+ok($job{$_}, "found the $_ job") for qw( plan publish );
+
+# Drop step names and comments: they mention "tarball" and "release.json" in prose.
+sub code_of {
+  join '', grep { !/^\s*(?:-\s+)?name:/ && !/^\s*#/ } split /^/m, $_[0];
+}
+
+# Uses of NAME that are workspace-relative: not preceded by a path separator,
+# a variable sigil or a word/dash character (so $RUNNER_TEMP/NAME, $NAME,
+# ${NAME}, dist-NAME do not count) and not an assignment (NAME=$RUNNER_TEMP/...).
+sub relative_uses {
+  my ($code, $name) = @_;
+  my $re = qr/(?<![\w\/\$\{\}.\-])\Q$name\E(?![\w=])/;
+  return grep { /$re/ } split /^/m, $code;
+}
+
+my $temp = qr{\$RUNNER_TEMP|\$\{\{\s*runner\.temp\s*\}\}};
+
+my $plan = code_of($job{plan} // '');
+my @dl = relative_uses($plan, 'dl');
+is_deeply(\@dl, [], 'plan: no workspace-relative dl') or diag @dl;
+like($plan, qr{^\s*mv\s+\./\*\.tar\.gz\s+"?\$}m, 'plan: the built tarball moves to a variable location');
+like($plan, qr{gh release download\b[^\n]*-D\s+"?\$}, 'plan: the release tarball downloads to a variable location');
+my ($plan_upload) = $plan =~ /upload-artifact.*?^\s*path:\s*([^\n]*\S)/ms;
+like($plan_upload // '', qr{^$temp/}, 'plan: upload-artifact reads the tarball from below runner.temp');
+
+my $publish = code_of($job{publish} // '');
+for my $name (qw( tarball assets release.json latest.json latest.err )) {
+  my @rel = relative_uses($publish, $name);
+  is_deeply(\@rel, [], "publish: no workspace-relative $name") or diag @rel;
+}
+my @paths = $publish =~ /^\s*path:\s*([^\n]*\S)/mg;
+is(scalar @paths, 3, 'publish: three artifact/checkout paths') or diag "@paths";
+my @art = grep { !/^\.dzil-binary$/ } @paths;
+is(scalar @art, 2, 'publish: two download-artifact paths (tarball, assets)');
+like($_, qr{^\$\{\{\s*runner\.temp\s*\}\}/}, "publish: download-artifact path $_ is below runner.temp") for @art;
+
 done_testing;

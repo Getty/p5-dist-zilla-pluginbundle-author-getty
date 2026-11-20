@@ -9,6 +9,10 @@
     no longer leaves its program one version behind as an uncommitted
     change.
 
+  - The binary release workflow keeps its plan and publish scratch files
+    (dl/, tarball/, assets/, release.json, latest.json) below $RUNNER_TEMP
+    as well, so a probe run no longer creates dl/ in the dist's checkout.
+
 0.328     2026-11-18 03:01:44Z
 
   - The release test-installs the tarball with "cpanm --test-only" before

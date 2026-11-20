@@ -84,15 +84,15 @@ jobs:
       - name: Collect the built tarball (probe)
         if: inputs.tag == ''
         run: |
-          mkdir dl
-          mv ./*.tar.gz dl/
+          mkdir "$RUNNER_TEMP/dl"
+          mv ./*.tar.gz "$RUNNER_TEMP/dl/"
       - name: Download the release tarball
         if: inputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           for i in $(seq 1 30); do
-            if gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p '*.tar.gz' -D dl --clobber; then
+            if gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p '*.tar.gz' -D "$RUNNER_TEMP/dl" --clobber; then
               exit 0
             fi
             [ "$i" -lt 30 ] && sleep 10
@@ -103,7 +103,7 @@ jobs:
         id: plan
         run: |
           set -euo pipefail
-          set -- dl/*.tar.gz
+          set -- "$RUNNER_TEMP"/dl/*.tar.gz
           if [ $# -ne 1 ] || [ ! -f "$1" ]; then
             echo "::error::want exactly one dist tarball, found: $*"
             exit 1
@@ -143,7 +143,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: dist-tarball
-          path: dl/*.tar.gz
+          path: ${{ runner.temp }}/dl/*.tar.gz
           if-no-files-found: error
 
   build:
@@ -385,35 +385,39 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: dist-tarball
-          path: tarball
+          path: ${{ runner.temp }}/tarball
       - name: Fetch the binaries
         uses: actions/download-artifact@v8
         with:
           pattern: '*-${{ needs.plan.outputs.version }}-*'
           merge-multiple: true
-          path: assets
+          path: ${{ runner.temp }}/assets
       - name: Upload to the release
         run: |
           set -euo pipefail
           p=.dzil-binary/.github/dzil-binary/publish.pl
           dist_src=$RUNNER_TEMP/dist-src
+          assets=$RUNNER_TEMP/assets
+          release_json=$RUNNER_TEMP/release.json
+          latest_json=$RUNNER_TEMP/latest.json
+          latest_err=$RUNNER_TEMP/latest.err
           mkdir "$dist_src"
-          tar xzf tarball/*.tar.gz -C "$dist_src" --strip-components=1
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" >release.json
+          tar xzf "$RUNNER_TEMP"/tarball/*.tar.gz -C "$dist_src" --strip-components=1
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" >"$release_json"
           # only a 404 means "no latest release yet" (an empty file); any other failure stops here
-          if ! gh api "repos/$GITHUB_REPOSITORY/releases/latest" >latest.json 2>latest.err; then
-            cat latest.err >&2
-            grep -Eq '\(HTTP 404\)$|^gh: HTTP 404$' latest.err || { echo "::error::cannot read releases/latest"; exit 1; }
-            : >latest.json
+          if ! gh api "repos/$GITHUB_REPOSITORY/releases/latest" >"$latest_json" 2>"$latest_err"; then
+            cat "$latest_err" >&2
+            grep -Eq '\(HTTP 404\)$|^gh: HTTP 404$' "$latest_err" || { echo "::error::cannot read releases/latest"; exit 1; }
+            : >"$latest_json"
           fi
-          latest=$(perl "$p" check "$dist_src/META.json" "$VERSION" assets release.json latest.json)
-          perl "$p" sums assets
-          perl "$p" render "$dist_src/META.json" "${GITHUB_REPOSITORY%%/*}" "${GITHUB_REPOSITORY#*/}" "$TAG" assets
+          latest=$(perl "$p" check "$dist_src/META.json" "$VERSION" "$assets" "$release_json" "$latest_json")
+          perl "$p" sums "$assets"
+          perl "$p" render "$dist_src/META.json" "${GITHUB_REPOSITORY%%/*}" "${GITHUB_REPOSITORY#*/}" "$TAG" "$assets"
           list=$(perl "$p" expected "$dist_src/META.json" "$VERSION")
           [ -n "$list" ] || { echo "::error::publish.pl expected listed no binaries"; exit 1; }
           files=()
-          while IFS= read -r name; do files+=("assets/$name"); done <<<"$list"
-          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" "${files[@]}" assets/SHA256SUMS assets/install.sh assets/install.ps1
+          while IFS= read -r name; do files+=("$assets/$name"); done <<<"$list"
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" "${files[@]}" "$assets/SHA256SUMS" "$assets/install.sh" "$assets/install.ps1"
           if [ "$latest" = latest=true ]; then
             gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --latest
           fi
