@@ -1,0 +1,27 @@
+---
+class: standard
+completed: 2026-11-20T16:03:54Z
+created: 2026-11-18T04:03:01Z
+id: 34
+priority: low
+started: 2026-11-20T15:44:38Z
+status: done
+tags:
+- binary
+- workflow
+title: 'dzil-binary.yml: dl/, tarball/, assets/ and release.json below $RUNNER_TEMP
+  too'
+updated: 2026-11-20T16:03:59Z
+---
+
+The probe run checks the dist out at the workspace root. Since c339eef the tarball unpacks into $RUNNER_TEMP/dist-src, but the plan job still creates dl/ and the publish job tarball/, assets/, release.json and latest.json in the workspace. publish runs only with a tag (no checkout), so today only dl/ in the probe can collide with a dist that has a root dl/. Move them below $RUNNER_TEMP as well and extend t/binary-workflow.t.
+
+Maintainer said to work the open cards (2026-11-20). Plan: test-writer RED in t/binary-workflow.t, worker moves dl/, tarball/, assets/, release.json, latest.json below $RUNNER_TEMP; k33 follows on the same files.
+
+test-writer: RED extension of t/binary-workflow.t (11 new assertions fail on today's workflow: plan dl, publish tarball/assets/release.json/latest.json/latest.err, download/upload-artifact paths). Not committed.
+
+worker: dzil-binary.yml plan job dl/ and publish job tarball/, assets/, release.json, latest.json, latest.err now live below $RUNNER_TEMP (shell) / ${{ runner.temp }} (upload/download-artifact path:). build, smoke, .dzil-binary and dist-src untouched; header comment names none of these paths, unchanged. publish.pl only uses File::Spec->catfile on the dirs it is given and finds its templates via __FILE__ (cwd unchanged), and gh release upload names assets by basename, so the uploaded names are the same. Test fix (extraction only, claims unchanged): t/binary-workflow.t captured path: values with (\S+), which cut the house-style ${{ runner.temp }}/x down to '${{'. The two captures are now ([^\n]*\S). The fixed test fails the same 11 assertions on the old workflow and catches either path: reverted. Verified: prove -lr t/binary-workflow.t 22/22; prove -lr t/ 40 files, 1228 tests, PASS, no skips; YAML::XS + PyYAML parse OK; actionlint not installed; plan (probe + tag) and publish run: blocks run locally against a stub gh, exit 0, dist root dl/ untouched. Not committed.
+
+Ready for review: .github/workflows/dzil-binary.yml (plan + publish scratch paths below runner temp) and t/binary-workflow.t (two (\S+) captures widened to ([^\n]*\S), claims unchanged; test-writer may want to confirm). prove -lr t/ PASS. Proposed subject: Keep the binary workflow's plan and publish scratch files below $RUNNER_TEMP
+
+Committed as 02df5f5
