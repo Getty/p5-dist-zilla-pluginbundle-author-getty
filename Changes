@@ -1,4 +1,4 @@
-{{$NEXT}}
+0.329     2026-11-20 22:26:55Z
 
   - The binary release workflow unpacks the dist tarball below
     $RUNNER_TEMP instead of "src" in the workspace, so a dist that has its
