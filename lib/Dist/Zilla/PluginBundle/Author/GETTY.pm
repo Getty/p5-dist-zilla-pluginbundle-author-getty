@@ -124,7 +124,8 @@ In default configuration it is equivalent to:
   [@Git::VersionManager]
   ; handles versioning, changelog (NextRelease), commits, tags
   post-release commit.allow_dirty_match = ^bin/
-  ; ... the bundle adds this on top of the ^lib/.*\.pm$ default
+  post-release commit.allow_dirty_match = ^script/
+  ; ... the bundle adds these on top of the ^lib/.*\.pm$ default
 
   [Git::Push]
   push_to = origin
@@ -416,10 +417,11 @@ Multi-value:
 This is B<not> needed for Perl executables: the C<$VERSION> bump after a
 release covers them through the C<:PerlExecFiles> finder, but
 @Git::VersionManager only allows C<^lib/.*\.pm$> to be dirty in the commit that
-records the bump. The bundle therefore passes an additional
-C<allow_dirty_match> of C<^bin/> into that commit, so a bumped Perl executable
-is committed along with the modules instead of being left behind in the
-working tree.
+records the bump. The bundle therefore passes additional
+C<allow_dirty_match> rules of C<^bin/> and C<^script/> into that commit, so a
+bumped Perl executable is committed along with the modules instead of being
+left behind in the working tree. C<script/> covers a dist that installs its
+programs from there with C<[ExecDir] dir = script> in its own F<dist.ini>.
 
 =head2 no_podweaver
 
@@ -1784,7 +1786,11 @@ sub configure {
       # @Git::VersionManager's post-release commit only allows ^lib/.*\.pm$ to be
       # dirty. Without this, bumped Perl executables under bin/ are left behind
       # as uncommitted changes, so their source stays one version behind lib/.
-      'post-release commit.allow_dirty_match' => [ '^bin/' ],
+      # script/ likewise: a dist that adds "[ExecDir] dir = script" to its own
+      # dist.ini (App-Briefing, whose bin/ belongs to its Claude Code plugin)
+      # gets those files into :PerlExecFiles, so they are bumped too, and
+      # configure() cannot see the dist's own [ExecDir] to derive the directory.
+      'post-release commit.allow_dirty_match' => [ '^bin/', '^script/' ],
       $self->no_changes ? ( 'NextRelease.format' => '' ) : (),
       @{ $self->commit_files_after_release } ? ( commit_files_after_release => $self->commit_files_after_release ) : (),
       @{ $self->version_finder } ? (

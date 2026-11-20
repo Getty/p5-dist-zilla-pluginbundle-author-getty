@@ -4,6 +4,11 @@
     $RUNNER_TEMP instead of "src" in the workspace, so a dist that has its
     own "src" directory at the root runs the probe and the release too.
 
+  - The commit after a release also commits a bumped Perl executable under
+    script/, not only under bin/, so a dist with "[ExecDir] dir = script"
+    no longer leaves its program one version behind as an uncommitted
+    change.
+
 0.328     2026-11-18 03:01:44Z
 
   - The release test-installs the tarball with "cpanm --test-only" before
