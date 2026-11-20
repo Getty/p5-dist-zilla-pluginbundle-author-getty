@@ -1,0 +1,26 @@
+---
+class: standard
+completed: 2026-11-20T18:28:21Z
+created: 2026-11-20T16:22:43Z
+id: 36
+priority: low
+started: 2026-11-20T18:18:16Z
+status: done
+tags:
+- binary
+- publish
+title: publish.pl check guards only the binary assets
+updated: 2026-11-20T18:28:26Z
+---
+
+Found during k33 design: publish.pl check refuses a re-run only when the expected binary assets already exist on the release. An already present SHA256SUMS, install.sh, install.ps1 (and after k33 provenance.json) passes check, and gh release upload then fails on the duplicate name after the check said go. Either check covers every asset the publish step uploads, or the upload uses --clobber for the non-binary files deliberately; decide which and extend t/binary-publish.t.
+
+Maintainer 2026-11-20: do the new cards directly. Decision (main agent): check covers every asset the publish step uploads (binaries, SHA256SUMS, install.sh, install.ps1, provenance.json) and refuses before any upload; no --clobber, because overwriting SHA256SUMS on a published release would silently replace the pins' trust root. This replaces the k33 guard claim 'check passes when the release already holds provenance.json'.
+
+RED test written in t/binary-publish.t: check must refuse existing SHA256SUMS/install.sh/install.ps1/provenance.json (each, all four, mixed with a binary); tarball+unrelated assets still pass. Replaced k33 guard check_with_existing_provenance. 19 assertions fail on current publish.pl; rest of t/ green. Worker implements next.
+
+Worker: publish.pl check now refuses a release that already holds any name the publish step's gh release upload sends. That is the expected binaries plus a fixed list @BESIDE = SHA256SUMS install.sh install.ps1 provenance.json, matched by exact name, one 'release already has asset: NAME' line per clash, binaries first and then the four in upload order. No --clobber. The workflow publish-step comment and the =head2 Binaries POD say nothing about re-runs, and the publish.pl header usage line does not describe the guard, so all three are unchanged. Verified: prove -lr t/binary-publish.t 71/71 ok; prove -lr t/ Files=41 Tests=1775 PASS, nothing skipped; perl -c publish.pl syntax OK.
+
+check covers every uploaded asset (k36); tree commit-ready: .github/dzil-binary/publish.pl and t/binary-publish.t. Ready for review.
+
+Committed as 7021368
