@@ -74,6 +74,13 @@ machine() {
         [ -z "$build" ] || abi=nt-$build
       fi
       ;;
+    ?*)
+      # a system whose kernel is the operating system (the BSDs, Solaris, Haiku,
+      # GNU/Hurd): uname names it and its release. Not Linux: there uname names the
+      # kernel, which in a container is the host's, so a Linux without os-release
+      # keeps a null os
+      os="$kernel${release:+ $release}"
+      ;;
   esac
   printf '%s=%s\n' "${p}os" "$(clean "$os")" "${p}architecture" "$(clean "$arch")" "${p}abi" "$(clean "$abi")" \
     "${p}kernel" "$(clean "$kernel")" "${p}kernel_release" "$(clean "$release")"

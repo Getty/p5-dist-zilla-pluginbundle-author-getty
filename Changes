@@ -1,5 +1,10 @@
 {{$NEXT}}
 
+  - The provenance facts name the operating system of a machine whose
+    kernel is the system (the BSDs, Solaris, Haiku) by its uname name and
+    release instead of leaving machine.os null. A Linux without
+    os-release keeps a null os rather than the kernel's name.
+
 0.329     2026-11-20 22:26:55Z
 
   - The binary release workflow unpacks the dist tarball below

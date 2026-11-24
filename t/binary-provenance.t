@@ -437,7 +437,29 @@ sub facts { my ($env, @args) = @_; return run_cmd(['sh', script('facts.sh'), @ar
   chomp(my $uname_m = `uname -m`); chomp(my $uname_s = `uname -s`);
   is(one($kv, 'x_architecture'), $uname_m, 'facts_machine: architecture is uname -m');
   is(one($kv, 'x_kernel'), $uname_s, 'facts_machine: kernel is uname -s');
-  ok(length(one($kv, 'x_os') // ''), 'facts_machine: os is not empty here');
+  if ($uname_s =~ /\ALinux/ && !-r '/etc/os-release') {
+    # Android: a Linux names its distribution only in os-release; uname names the
+    # kernel, which in a container is the host's
+    is(one($kv, 'x_os'), '', 'facts_machine: a Linux without /etc/os-release has a null os, never the kernel');
+  }
+  else {
+    ok(length(one($kv, 'x_os') // ''), 'facts_machine: os is not empty here');
+  }
+}
+{ # a system whose kernel is the operating system: os is its name and release
+  my $bin = tempdir(CLEANUP => 1);
+  spew("$bin/uname", <<"PERL", 0755);
+#!$^X
+my %u = ('-s' => 'FreeBSD', '-r' => '15.1-RELEASE-p5', '-m' => 'amd64');
+exit 1 unless \@ARGV == 1 && exists \$u{\$ARGV[0]};
+print "\$u{\$ARGV[0]}\\n";
+PERL
+  my ($rc, $out, $err) = run_cmd(['sh', script('facts.sh'), 'machine', 'x_'], env => { PATH => "$bin:$ENV{PATH}" });
+  is($rc, 0, 'facts_machine_bsd: exit 0') or diag $err;
+  my ($kv) = parse_part($out);
+  is(one($kv, 'x_kernel'), 'FreeBSD', 'facts_machine_bsd: (fixture) uname -s is FreeBSD');
+  is(one($kv, 'x_os'), 'FreeBSD 15.1-RELEASE-p5', 'facts_machine_bsd: os is uname -s and uname -r');
+  is(one($kv, 'x_abi'), '', 'facts_machine_bsd: no abi is guessed');
 }
 { # no getconf on PATH: abi may be empty, the run never fails
   my $bin = tempdir(CLEANUP => 1);
@@ -445,11 +467,11 @@ sub facts { my ($env, @args) = @_; return run_cmd(['sh', script('facts.sh'), @ar
   for my $p (grep { length && -d } File::Spec->path) {
     opendir my $dh, $p or next;
     for my $n (readdir $dh) {
-      next if $n eq 'getconf' || $seen{$n}++ || -e "$bin/$n";
+      next if $n =~ /\Agetconf(?:\.exe)?\z/i || $seen{$n}++ || -e "$bin/$n";   # getconf.exe: Cygwin
       symlink "$p/$n", "$bin/$n" if -x "$p/$n" && !-d "$p/$n";
     }
   }
-  ok(!-e "$bin/getconf", 'facts_machine_nogetconf: the restricted PATH has no getconf');
+  ok(!-e "$bin/getconf" && !-e "$bin/getconf.exe", 'facts_machine_nogetconf: the restricted PATH has no getconf');
   my ($rc, $out, $err) = run_cmd(['sh', script('facts.sh'), 'machine', 'x_'], env => { PATH => $bin });
   is($rc, 0, 'facts_machine_nogetconf: exit 0 without getconf') or diag $err;
   my ($kv) = parse_part($out);
