@@ -1,0 +1,53 @@
+---
+claimed_at: 2026-11-24T20:58:27Z
+claimed_by: ct-1124
+class: standard
+completed: 2026-11-24T20:58:27Z
+created: 2026-11-24T18:49:21Z
+id: 37
+priority: critical
+started: 2026-11-24T20:58:27Z
+status: done
+tags:
+- cpantesters
+- tests
+- bug
+title: 'CPAN Testers: fix the 31 FAIL reports of 0.329'
+updated: 2026-11-24T20:58:43Z
+---
+
+Dist::Zilla::PluginBundle::Author::GETTY 0.329 on CPAN Testers (2026-11-24): 31 FAIL, 38 PASS,
+5 NA.
+
+1. t/binary-provenance.t line 440 (23 reports: FreeBSD, OpenBSD, Android, Windows, NetBSD):
+   "facts_machine: os is not empty here".
+2. t/binary-win32.t tests 59-60 (12 reports, Linux too: x86_64-linux 5.36-5.44, aarch64,
+   GNU/Hurd, Cygwin, Haiku): "_run_hook (linux): the exit status is returned" and
+   "_run_hook (MSWin32): the exit status is returned".
+3. t/binary-scripts.t (10) and t/binary-build.t (5) on OpenBSD, FreeBSD, Windows, GNU/Hurd,
+   Haiku: gate_start_invocation (PAR_GLOBAL_TEMP, --help, stdin at EOF),
+   gate_start_*_fails, glibc_check_did_not_run, gate_control_ok / _over_floor,
+   windows_cli_system.
+4. Windows only (2 reports): t/binary-config.t, t/task_next_release.t, t/binary-workflow.t,
+   t/binary-publish.t. FreeBSD once: t/karr_exclusion_build.t.
+
+Sample reports (GUID): 1966d750-e67e-11f1-b67f-9eee6d8775ea (2, Linux 5.44).
+
+Done: each cause fixed with a test red before, or the check skipped with the reason where
+the platform cannot run it; full suite green; Changes entry for each lib fix.
+
+2026-11-24 19:13 Cause 1 fixed in 4129907 (lib): facts.sh machine left os null on every kernel but Linux/Darwin/Windows. Decision: where the kernel is the system (BSDs, Solaris, Haiku, GNU/Hurd) os = uname -s + uname -r; a Linux without /etc/os-release (Android) stays null on purpose, because in a container uname names the host's kernel - the test now asserts that null instead of skipping. New test facts_machine_bsd (fake uname) was red against old facts.sh (got ''). Cygwin's 452 (getconf.exe on the restricted PATH) fixed in the same commit. Windows' binary-provenance failures (no sh, CRLF) go with cause 4.
+
+2026-11-24 19:13 Cause 2 fixed in 0f1c8b7 (test only): the _run_hook fixture 'exit 4' runs as 'exit 4 BINARY', which bash (sh on Fedora/RHEL/Arch/Cygwin/Haiku) refuses with status 1; dash ignores the extra word, so Debian CI never saw it. Reproduced with bash first on PATH as sh (got 1, expected 4); fixture is now a function taking the argument. Same commit: Cygwin -e NAME finds NAME.exe (check by listing), Hurd/Haiku ENOENT != 2 (Errno::ENOENT).
+
+2026-11-24 19:16 Cause 3 fixed in 1a1e1b7 (test only). OpenBSD: the fake ldd/objdump/otool scripts run with PATH = their dir only and use printf, which OpenBSD's ksh has no builtin for (printf: not found, exit 127) - the dirs now carry a printf symlink where /bin/sh lacks it; reproduced in a container with mksh as /bin/sh: old 47/326 failed = exactly the count of all four OpenBSD reports, new pass. run_tool_win32_signal: pdksh exits 143 on self-TERM instead of dying by the signal - the case now kills a perl. FreeBSD(/var->/private/var)/Haiku leg_verify: bash pwd is physical, test workspace now abs_path - reproduced with TMPDIR behind a symlink. binary-build.t unstartable_pp: Errno::ENOENT; skip only where the probe shows the system starts a script with a missing #! interpreter (Haiku, exit 3). Hurd 809 (1 of 2 Hurd reports): process-group kill poll widened 2s -> 10s; not reproducible here, plausibly timing.
+
+Cause 4 (Windows), ready for commit: lib - plan.pl, publish.pl and provenance.pl binmode STDOUT/STDERR, so Strawberry's default :crlf no longer turns their LF lines into CRLF (pp-args.pl and build-leg.sh already do this; decision: lib fix, not CRLF-tolerant tests, which would soften them). New lf tests in binary-publish.t (3), binary-scripts.t plan_lf (3) and binary-provenance.t merge_lf/artifact_lf (3) were red under PERLIO=:unix:crlf before the fix. Tests: binary-config.t and task_next_release.t write their fixture LICENSE/Changes with spew_raw (reproduced with PERLIO=:unix:crlf: LicenseFile sees a stale LICENSE, the stamped heading ends in a CR). Platform skips only where Windows cannot run them, per block and not skip_all, so the pure tests still run: #!/bin/sh fakes (MSWin32 runs no #! line), no sh/bash on PATH (facts.sh, build-leg.sh, the workflow step, pp_args), POSIX echo/false/pwd. binary-build.t skips all on MSWin32 (pp/verify/smoke are all #!/bin/sh fakes; binary-win32.t covers the MSWin32 branches). plan_prepare_key no longer uses implicit-fork open '-|' (not on MSWin32 per perlport). Skip counts checked by forcing every condition: scripts 330 tests/137 skipped, provenance 261/100, workflow 287/15, 0 failed. Not verifiable here: real Windows.
+
+Cause 4, FreeBSD t/karr_exclusion_build.t (1 report): open, not fixed. Mechanism shown, not reproduced: Dist::Zilla::Tester ignores dircopy's return value, and File::Copy::Recursive 0.45 stops the whole copy at the first file it cannot copy, so dist.ini is left out -> exactly 'no viable configuration could be found'. Likely trigger: git 2.47's 'git commit' starts a detached 'git maintenance run --auto', which can still be writing in .git while the copy runs. 25 runs here on tmpfs, 0 failures. Proposed hardening, not applied because there is no red test: -c maintenance.auto=false -c gc.auto=0 on the fixture commit.
+
+Also found: (1) LicenseFile rejects a CRLF LICENSE, e.g. a Windows checkout with core.autocrlf - belongs to the p5-dist-zilla-plugin-licensefile board. (2) binary-win32.t fixtures verify/smoke => 'exit 1' print 'exit: too many arguments' under bash but still pass. (3) Dist::Zilla::Tester ignores dircopy failures (upstream). (4) On Strawberry 5.24, Archive::Zip says 'bad signature' on the sh-prefixed fake binaries (only in the blocks now skipped on MSWin32). (5) The binary-scripts.t sections after the old Windows crash point have never run on real Windows.
+
+Cause 4 committed in f83874e (lib + tests). Full suite offline green on ct-1124 at f83874e: prove -lr t/ Files=41, Tests=1789, Result: PASS; main unchanged at 082b757, no rebase needed. Branch ct-1124 = 4129907, 0f1c8b7, 1a1e1b7, f83874e. Open: the single FreeBSD karr_exclusion_build.t report (see note above: not reproduced, hardening proposed, not applied); real Windows not verifiable here.
+
+2026-11-24 20:58 Merged to main (4129907, 0f1c8b7, 1a1e1b7, f83874e) and pushed. bin/smoke on main: perl 5.22 and 5.40 PASS. The single FreeBSD karr_exclusion_build.t report stays open as not reproduced (see note above).
