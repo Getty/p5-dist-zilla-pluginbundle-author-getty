@@ -441,7 +441,8 @@ my @LINUX_SYSTEM = (
 
 # --- fix round 1: lib-gate must not pass silently ---------------------------
 # CLI runs use a PATH that holds ONLY a directory of fake shell-script tools
-# (interpreter is the absolute /bin/sh; scripts use builtins only).
+# (interpreter is the absolute /bin/sh; scripts use builtins only, and printf,
+# which the directory carries where /bin/sh has no printf builtin: OpenBSD's ksh).
 
 sub run_script_env {
   my ($env, $name, @args) = @_;
@@ -457,9 +458,15 @@ sub run_script_env {
   return ($? >> 8, scalar(slurp($o)), scalar(slurp($e)));
 }
 
+my $PRINTF = do {
+  my $builtin = `/bin/sh -c 'PATH=/nonexistent; printf x' 2>/dev/null`;
+  $builtin eq 'x' ? undef : (grep { -x } map { File::Spec->catfile($_, 'printf') } grep { length } File::Spec->path)[0];
+};
+
 sub fake_tools {
   my ($bindir, %tools) = @_;
   require File::Path; File::Path::make_path($bindir);
+  symlink $PRINTF, "$bindir/printf" or die "symlink $PRINTF: $!" if defined $PRINTF;
   for my $t (sort keys %tools) {
     spew("$bindir/$t", "#!/bin/sh\n$tools{$t}\n");
     chmod 0755, "$bindir/$t";
@@ -786,9 +793,9 @@ sub zombie {
   return defined $st && $st =~ /^\s*Z/ ? 1 : 0;
 }
 
-sub dead {
+sub dead {   # polls up to 10s: a slow system (GNU/Hurd) reaps the orphaned child late
   my ($pid) = @_;
-  for (1 .. 20) {
+  for (1 .. 100) {
     return 1 unless kill 0, $pid;
     return 1 if zombie($pid);
     select undef, undef, undef, 0.1;
@@ -971,8 +978,9 @@ sub dead {
     'run_tool_win32_merge_stderr: dies before anything is started (not even a missing tool is reached)');
 
   $err = '';
-  eval { DzilBinary::LibGate::run_tool(0, '/bin/sh', '-c', 'kill -TERM $$'); 1 } or $err = $@;
-  is($err, "/bin/sh was killed by signal 15\n", 'run_tool_win32_signal: a signalled tool dies naming the signal');
+  # perl, not sh: OpenBSD's ksh catches the TERM it sends itself and exits 143
+  eval { DzilBinary::LibGate::run_tool(0, $^X, '-e', 'kill TERM => $$; sleep 10'); 1 } or $err = $@;
+  is($err, "$^X was killed by signal 15\n", 'run_tool_win32_signal: a signalled tool dies naming the signal');
 }
 # untested: run_tool_win32 "cannot wait for <cmd>" ($? == -1 after close) -- not reachable from a test.
 
@@ -1274,7 +1282,9 @@ SKIP: {
   my ($bash) = grep { -x $_ } map { File::Spec->catfile($_, 'bash') } grep { length } File::Spec->path;
   skip 'no bash on PATH', 9 unless $bash;
 
-  my $leg   = tempdir(CLEANUP => 1);
+  # physical: build-leg.sh takes the workspace from pwd, which is the physical
+  # path where the temp directory is behind a symlink (/var -> /private/var)
+  my $leg   = abs_path(tempdir(CLEANUP => 1));
   my $home  = "$leg/home";
   my $ws    = "$leg/ws";
   my $local = "$home/dzil-binary/local/lib/perl5";

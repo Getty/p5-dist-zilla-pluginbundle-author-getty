@@ -5,6 +5,7 @@ use Test::More;
 use Path::Tiny;
 use File::Temp qw(tempdir);
 use Cwd qw(getcwd);
+use Errno ();
 
 plan skip_all => "Dist::Zilla::Tester not available"
   unless eval { require Dist::Zilla::Tester; require Dist::Zilla::Chrome::Term; 1 };
@@ -255,17 +256,20 @@ packs_scenario('plain');
 # pp is found but cannot be started (system returns -1): the build dies with the
 # reason from $!, not with a bogus exit code. The interpreter of its #! line does
 # not exist (a file without #! would be run through sh instead).
-{
+SKIP: {
   my $badbin = $tools->child('badpp');
   $badbin->mkpath;
   $badbin->child('pp')->spew("#!/nonexistent/interpreter\n");
   chmod 0755, $badbin->child('pp');
+  my $probe = do { my $pp = $badbin->child('pp')->stringify; local $SIG{__WARN__} = sub { }; system { $pp } $pp };
+  skip "this system starts a script whose #! interpreter does not exist (wait status $probe): no unstartable pp to build", 3
+    unless $probe == -1;   # Haiku
   my @warn;
   my ($tzil, $err) = do {
     local $SIG{__WARN__} = sub { push @warn, @_ };   # perl's "Can't exec ..."
     build_dist($BUNDLE . "binary = foo\n", path => "$badbin:$nopp");
   };
-  my $enoent = do { local $! = 2; "$!" };
+  my $enoent = do { local $! = Errno::ENOENT(); "$!" };   # not 2 on GNU/Hurd or Haiku
   like $err // '', qr/cannot run pp for binary foo: \Q$enoent\E/,
     'unstartable_pp: the build dies with "cannot run pp for binary foo: <reason from $!>"';
   # the message without its " at FILE line N" tail: a smoker's path may hold long numbers
