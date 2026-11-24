@@ -2,11 +2,10 @@
 name: dist-zilla-pluginbundle-author-getty-test-writer
 description: "Write Dist-Zilla-PluginBundle-Author-GETTY tests with Test::More — either instantiating the bundle directly and forcing lazy attributes in a fabricated cwd, or driving a full build through Dist::Zilla::Tester->from_config with an inline dist.ini and asserting on the assembled plugin list. The suite never touches the network or a real git remote. Use for test additions, regression scaffolding and coverage of configure()'s plugin-assembly logic."
 model: sonnet
-briefing:
-  skills:
-    - dist-zilla-pluginbundle-author-getty-core
-    - getty-perl-moose
-    - kanban-issues-karr-ticket
+skills:
+  - dist-zilla-pluginbundle-author-getty-core
+  - getty-perl-moose
+  - kanban-issues-karr-ticket
 ---
 
 You are the dist-zilla-pluginbundle-author-getty-test-writer for **the

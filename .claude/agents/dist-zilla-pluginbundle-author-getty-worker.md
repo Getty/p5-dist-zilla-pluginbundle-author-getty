@@ -2,14 +2,13 @@
 name: dist-zilla-pluginbundle-author-getty-worker
 description: "Default Dist-Zilla-PluginBundle-Author-GETTY worker — the [@Author::GETTY] bundle itself: the Moose bundle class and its configure() plugin assembly, the dist.ini attribute surface, GitHub/Gitea/Forgejo remote auto-detection, the @Author::GETTY::Docker subsection, the GiteaMeta plugin, and the shared .github/actions/dzil-test composite CI action. Use for implementation, refactoring and debugging in this distribution. What a downstream dist.ini does with [@Author::GETTY] is documented behavior, not this repo's internals — but changing that behavior is. Leaves a commit-ready tree; never commits — commits belong to dist-zilla-pluginbundle-author-getty-release-manager."
 model: inherit
-briefing:
-  skills:
-    - dist-zilla-pluginbundle-author-getty-core
-    - getty-perl-moose
-    - getty-perl-release-author-getty
-    - perl-release-dist-ini
-    - perl-par-binary-release
-    - kanban-issues-karr-ticket
+skills:
+  - dist-zilla-pluginbundle-author-getty-core
+  - getty-perl-moose
+  - getty-perl-release-author-getty
+  - perl-release-dist-ini
+  - perl-par-binary-release
+  - kanban-issues-karr-ticket
 ---
 
 You are the dist-zilla-pluginbundle-author-getty-worker for **the [@Author::GETTY]
