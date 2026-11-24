@@ -4,6 +4,7 @@ use warnings;
 use Test::More;
 use File::Spec;
 use File::Temp qw(tempdir);
+use Errno ();
 use Path::Tiny;
 
 use Dist::Zilla::Plugin::Author::GETTY::Binary;
@@ -275,9 +276,11 @@ block '_run_hook' => sub {
     is_deeply [ split /\n/, $dblog->slurp ], [ 'sh', 1, $out, '', '', q{q "x"  {a,b} \\\\ *} ],
       '_run_hook (Unix): the same $0, $#, $1, and no environment hand-over';
   }
+  # the hook gets the binary as its argument: a bare `exit 4` would run as
+  # `exit 4 BINARY`, which bash refuses with status 1
   for my $os ('linux', 'MSWin32') {
     local $^O = $os;
-    my $rc = $CLASS->can('_run_hook')->('exit 4', $out);
+    my $rc = $CLASS->can('_run_hook')->('hook() { return 4; }; hook', $out);
     is $rc >> 8, 4, "_run_hook ($os): the exit status is returned";
   }
 };
@@ -344,7 +347,8 @@ block 'after_build MSWin32' => sub {
     [ $pp, '-o', "$sib/foo.exe", '-I', "$root/lib", '-M', 'A', '-a', 'x y;lib/z', "$root/bin/foo" ],
     'after_build (MSWin32): the child of $^X parses pp, then the same pp arguments, the binary NAME.exe';
   ok -f "$sib/foo.exe", 'after_build (MSWin32): the binary is NAME.exe';
-  ok !-e "$sib/foo", 'after_build (MSWin32): ... not NAME';
+  # by name, not -e: Cygwin's -e NAME also finds NAME.exe
+  ok !grep({ $_->basename eq 'foo' } path($sib)->children), 'after_build (MSWin32): ... not NAME';
   is_deeply [ split /\n/, $hooklog->slurp ], [ "verify $sib/foo.exe $sib/foo.exe", 'smoke', 'sh' ],
     'after_build (MSWin32): verify and smoke get NAME.exe as $1 and in DZIL_BINARY_OUT';
 
@@ -363,7 +367,7 @@ block 'after_build MSWin32' => sub {
 
   # pp found, but $^X cannot be started (system returns -1)
   {
-    my $enoent = do { local $! = 2; "$!" };
+    my $enoent = do { local $! = Errno::ENOENT(); "$!" };   # not 2 on GNU/Hurd or Haiku
     local $^X = "$tmp/no/such/perl";
     local $SIG{__WARN__} = sub { };   # perl's "Can't exec ..."
     eval { plugin()->after_build({ build_root => "$root" }) };
