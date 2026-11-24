@@ -316,4 +316,16 @@ for my $name (qw( SHA256SUMS install.sh install.ps1 provenance.json )) {
   is($err, '', 'check_passes_unrelated_assets: nothing on STDERR');
 }
 
+{ # lf_everywhere: the default layer of Strawberry perl (:crlf) does not reach the output
+  local $ENV{PERLIO} = ':unix:crlf';
+  my $d = tempdir(CLEANUP => 1);
+  my ($rc, $out, $err) = run_script('expected', write_meta($d), '1.0');
+  is($out, join('', map { "$_\n" } @EXPECTED), 'lf_everywhere: expected ends each name in a bare LF');
+  ($rc, $out, $err) = run_script('check', write_meta($d), '1.0', dl_dir(), release_json(0, 'Foo-Bar-1.0.tar.gz'), latest_json(undef));
+  is($out, "latest=true\n", 'lf_everywhere: check prints latest=true with a bare LF');
+  ($rc, $out, $err) = run_script('check', write_meta($d), '1.0', dl_dir(),
+    release_json(0, 'Foo-Bar-1.0.tar.gz', 'install.sh'), latest_json(undef));
+  is($err, "release already has asset: install.sh\n", 'lf_everywhere: STDERR lines end in a bare LF too');
+}
+
 done_testing;

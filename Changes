@@ -5,6 +5,10 @@
     release instead of leaving machine.os null. A Linux without
     os-release keeps a null os rather than the kernel's name.
 
+  - The binary release workflow's plan, publish and provenance scripts end
+    their lines in a bare LF on Windows too, as pp-args.pl already does,
+    so their output is the same bytes on every platform.
+
 0.329     2026-11-20 22:26:55Z
 
   - The binary release workflow unpacks the dist tarball below

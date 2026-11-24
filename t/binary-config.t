@@ -46,7 +46,8 @@ CONF
   $dist_dir->child('lib')->mkpath;
   $dist_dir->child('lib', 'Foo.pm')->spew("package Foo;\n# ABSTRACT: t\n1;\n");
   require Software::License::Perl_5;
-  $dist_dir->child("LICENSE")->spew(
+  # raw: a text-mode write on Windows gives CRLF, which LicenseFile takes for an out-of-date LICENSE
+  $dist_dir->child("LICENSE")->spew_raw(
     Software::License::Perl_5->new({ holder => "Test", year => 2026 })->license);
   for my $s (@{ $o{scripts} || [] }) {
     $dist_dir->child($s)->parent->mkpath;

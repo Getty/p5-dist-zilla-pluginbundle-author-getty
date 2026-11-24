@@ -329,6 +329,7 @@ sub artifact {
 sub main {
   my ($cmd, @a) = @_;
   $cmd //= '';
+  binmode STDOUT; binmode STDERR;   # LF lines everywhere: Strawberry perl would print CRLF
   my $rc = eval {
     if    ($cmd eq 'merge'    && @a == 6) { merge(@a) }
     elsif ($cmd eq 'verify'   && @a == 4) { verify(@a) }

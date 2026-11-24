@@ -157,6 +157,7 @@ sub latest_rule {
 sub main {
   my ($cmd, @a) = @_;
   $cmd //= '';
+  binmode STDOUT; binmode STDERR;   # LF lines everywhere: Strawberry perl would print CRLF
   my $rc = eval {
     if    ($cmd eq 'render'   && @a == 5) { render(@a) }
     elsif ($cmd eq 'expected' && @a == 2) {

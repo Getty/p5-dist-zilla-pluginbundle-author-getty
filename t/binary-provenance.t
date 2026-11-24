@@ -215,6 +215,9 @@ sub merge { my ($f) = @_; my $w = write_fixture($f); my @r = provenance('merge',
   my $canon = $m && %$m ? JSON::PP->new->canonical->pretty->ascii->encode($m) : '';
   is($out, $canon, 'merge_ok: STDOUT is the canonical pretty ascii JSON, with its trailing newline') if length $out;
   ok(length $out, 'merge_ok: STDOUT carries the manifest');
+  # the default layer of Strawberry perl (:crlf) does not reach the manifest
+  my (undef, $crlf_out) = run_cmd([$^X, script('provenance.pl'), 'merge', @{ $w->{args} }], env => { PERLIO => ':unix:crlf' });
+  is($crlf_out, $out, 'merge_lf: under a :crlf default layer the manifest is the same bytes');
   is($m->{schema_version}, 1, 'merge_ok: schema_version 1');
   is($m->{mode}, 'release', 'merge_ok: mode release');
   is_deeply(
@@ -412,6 +415,10 @@ fails('host build without runner_image_os', sub { setp($_[0]{builds}{'windows-x8
   my ($rc, $out, $err) = provenance('artifact', "$d/META.json", '1.0');
   is($rc, 0, 'artifact_name: exit 0') or diag $err;
   is($out, "Foo-Bar-1.0.provenance\n", 'artifact_name: <name>-<version>.provenance');
+  ($rc, $out, $err) = run_cmd([$^X, script('provenance.pl'), 'artifact', "$d/META.json", '1.0'], env => { PERLIO => ':unix:crlf' });
+  is($out, "Foo-Bar-1.0.provenance\n", 'artifact_lf: under a :crlf default layer the name ends in a bare LF');
+  ($rc, $out, $err) = run_cmd([$^X, script('provenance.pl'), 'bogus'], env => { PERLIO => ':unix:crlf' });
+  is($err, "usage: provenance.pl merge|verify|artifact ...\n", 'artifact_lf: the error line ends in a bare LF too');
   unlike($out, qr/-provenance/, 'artifact_name: never <dist>-<version>-provenance (that one matches the assets download pattern)');
   for my $bad (['bad name', 'Foo Bar', '1.0'], ['slash in name', 'Foo/Bar', '1.0'], ['bad version', 'Foo-Bar', '1.0 beta'], ['shell char', 'Foo$Bar', '1.0']) {
     my ($l, $n, $v) = @$bad;
@@ -425,6 +432,12 @@ fails('host build without runner_image_os', sub { setp($_[0]{builds}{'windows-x8
 }
 
 # --- facts.sh ----------------------------------------------------------------
+# facts.sh is a POSIX sh script: without a sh on PATH (Windows without Git Bash)
+# none of it can run. The section is not indented for the SKIP block.
+
+my ($SH) = grep { -x $_ } map { File::Spec->catfile($_, 'sh') } grep { length } File::Spec->path;
+SKIP: {
+skip 'no sh on PATH: facts.sh is a sh script', 74 unless $SH;
 
 sub facts { my ($env, @args) = @_; return run_cmd(['sh', script('facts.sh'), @args], env => $env) }
 
@@ -683,13 +696,13 @@ my $TAGGED = hex40('tagged');
   is(one($kv, 'source_commit'), $SRC, 'facts_plan_probe: source_commit from the checkout');
   ok(!-e $log, 'facts_plan_probe: gh is not called');
 }
+}   # SKIP: no sh on PATH
 
 # --- build-leg.sh provenance ---------------------------------------------------
 
 SKIP: {
   my ($bash) = grep { -x $_ } map { File::Spec->catfile($_, 'bash') } grep { length } File::Spec->path;
-  fail('bash is on PATH (build-leg.sh provenance cannot be driven without it)') unless $bash;
-  skip 'no bash on PATH - named failure above', 1 unless $bash;
+  skip 'no bash on PATH: build-leg.sh is a bash script', 26 unless $bash;
 
   my $leg = sub {
     my (%o) = @_;

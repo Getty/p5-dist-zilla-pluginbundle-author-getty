@@ -69,6 +69,7 @@ sub plan {
 
 sub main {
   my (@args) = @_;
+  binmode STDOUT; binmode STDERR;   # LF lines everywhere: Strawberry perl would print CRLF
   die "usage: plan.pl <META.json>\n" unless @args == 1;
   my @lines = eval { plan($args[0]) };
   if ($@) { print STDERR $@; return 1 }

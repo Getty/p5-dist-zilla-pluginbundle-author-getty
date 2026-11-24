@@ -10,6 +10,12 @@ use Errno ();
 plan skip_all => "Dist::Zilla::Tester not available"
   unless eval { require Dist::Zilla::Tester; require Dist::Zilla::Chrome::Term; 1 };
 
+# On MSWin32 the plugin starts pp as `$^X pp`, and nothing there runs a #! line:
+# the #!/bin/sh fakes below cannot stand in for pp, verify or smoke.
+# t/binary-win32.t drives the MSWin32 branches with $^O set on any platform.
+plan skip_all => "MSWin32 cannot run the #!/bin/sh fake pp, verify and smoke"
+  if $^O eq 'MSWin32';
+
 # The local binary check of dzil build (after_build) and the workflow check of
 # dzil release (before_release) of Dist::Zilla::Plugin::Author::GETTY::Binary.
 # The real pp never runs here: a fake pp (and fake verify / smoke commands) in

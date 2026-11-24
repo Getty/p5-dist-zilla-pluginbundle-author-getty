@@ -38,7 +38,8 @@ $extra
 CONF
   $dist_dir->child('lib','Task','Test.pm')->parent->mkpath;
   $dist_dir->child('lib','Task','Test.pm')->spew("package Task::Test;\n# ABSTRACT: t\n1;\n");
-  $dist_dir->child('Changes')->spew("{{\$NEXT}}\n\n  - something\n");
+  # raw: a text-mode write on Windows gives CRLF, and the stamped heading would end in a CR
+  $dist_dir->child('Changes')->spew_raw("{{\$NEXT}}\n\n  - something\n");
 
   for my $args (
     [qw(init -q)],

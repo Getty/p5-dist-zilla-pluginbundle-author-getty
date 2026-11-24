@@ -27,6 +27,13 @@ my %pkg = (
 
 # --- helpers ---------------------------------------------------------------
 
+# Platform limits, named by the skips below: MSWin32 runs no #! line, so a #!/bin/sh
+# fake tool cannot stand in for a real one there, and it has no /bin/sh, echo, false
+# or pwd; pp_args runs through sh, which Windows has only with Git Bash.
+my ($SH) = grep { -x $_ } map { File::Spec->catfile($_, 'sh') } grep { length } File::Spec->path;
+my $WIN_FAKES = $^O eq 'MSWin32' ? 'MSWin32 cannot run the #!/bin/sh fake tools' : '';
+my $WIN_POSIX = $^O eq 'MSWin32' ? 'MSWin32 has no /bin/sh, echo, false or pwd for these tests' : '';
+
 sub slurp { open my $fh, "<", $_[0] or die "$_[0]: $!"; binmode $fh; local $/; my $c = <$fh>; return defined $c ? $c : "" }
 sub spew {
   my ($path, $data) = @_;
@@ -160,6 +167,17 @@ for my $s (sort keys %pkg) {
   unlike($out, qr/^legs=/m, 'plan_rejects_bad_meta: no legs= line emitted');
 }
 
+{ # plan_lf: the default layer of Strawberry perl (:crlf) does not reach the output
+  local $ENV{PERLIO} = ':unix:crlf';
+  my $d = tempdir(CLEANUP => 1);
+  my ($rc, $out, $err) = run_script('plan.pl', write_meta($d, { platforms => [@ALL], binaries => {%BIN} }));
+  is($rc, 0, 'plan_lf: exit 0') or diag $err;
+  unlike($out, qr/\r/, 'plan_lf: every GITHUB_OUTPUT line ends in a bare LF');
+  is(plan_lines($out)->{prepare_key}, 'none', 'plan_lf: prepare_key is none, without a CR');
+  ($rc, $out, $err) = run_script('plan.pl', meta_without_x($d));
+  is($err, "$d/META.json has no x_binaries\n", 'plan_lf: the error line ends in a bare LF too');
+}
+
 { # plan_prepare_key
   my $d = tempdir(CLEANUP => 1);
   spew("$d/scripts/p.sh", "#!/bin/sh\necho one\n");
@@ -183,9 +201,15 @@ for my $s (sort keys %pkg) {
   spew("$d/scripts/p.sh", "X\n");
   my $meta = write_meta($d, { platforms => [@ALL], prepare => 'scripts/p.sh', binaries => {%BIN} });
   my $elsewhere = tempdir(CLEANUP => 1);
-  my $pid = open(my $fh, '-|') // die;
-  if (!$pid) { chdir $elsewhere or die; open STDERR, '>', File::Spec->devnull; exec $^X, script('plan.pl'), $meta; die }
-  my $out = do { local $/; <$fh> }; close $fh;
+  my $o = tempdir(CLEANUP => 1) . '/out';
+  # fork and a file, not open '-|': MSWin32 has no implicit-fork pipe open
+  my $pid = fork // die "fork: $!";
+  if (!$pid) {
+    chdir $elsewhere or die; open STDOUT, '>', $o or die; open STDERR, '>', File::Spec->devnull or die;
+    exec $^X, script('plan.pl'), $meta or die "exec: $!";
+  }
+  waitpid $pid, 0;
+  my $out = slurp($o);
   is(plan_lines($out)->{prepare_key}, sha256_hex("X\n"), 'plan_prepare_key: relative to the META.json directory, whatever the cwd');
 }
 
@@ -206,7 +230,8 @@ sub pp_argv {
   return ($rc, [split /\0/, $stdout], $stdout, $stderr);
 }
 
-{ # argv_keeps_spaces
+SKIP: { # argv_keeps_spaces
+  skip 'no sh on PATH: pp_args runs through sh', 4 unless $SH;
   my $d = tempdir(CLEANUP => 1);
   my $bins = { 'mcp-x' => { %{ $BIN{'mcp-x'} }, pp_args => q{printf '%s\n' '-a' '/x y;lib/z'} } };
   my ($rc, $argv, $raw, $err) = pp_argv({ platforms => [@ALL], binaries => $bins }, 'mcp-x', '/o/out', $d);
@@ -217,7 +242,8 @@ sub pp_argv {
   ok(!grep({ $_ eq '/x' || $_ eq 'y;lib/z' } @$argv), 'argv_keeps_spaces: no word-split fragments');
 }
 
-{ # argv_order
+SKIP: { # argv_order
+  skip 'no sh on PATH: pp_args runs through sh', 4 unless $SH;
   my $d = tempdir(CLEANUP => 1);
   my $bins = { 'mcp-x' => {
     script => 'bin/mcp-x', modules => [qw( Foo::Bar Baz )], require => [],
@@ -239,7 +265,8 @@ sub pp_argv {
   is_deeply($argv, [qw( -o /o/out -I lib bin/mcp-x )], 'argv_minimal: no pp_args and no modules -> just -o, -I lib, script');
 }
 
-{ # R4 line rule: CRLF stripped once, empty lines dropped
+SKIP: { # R4 line rule: CRLF stripped once, empty lines dropped
+  skip 'no sh on PATH: pp_args runs through sh', 2 unless $SH;
   my $d = tempdir(CLEANUP => 1);
   my $bins = { 'mcp-x' => { %{ $BIN{'mcp-x'} }, pp_args => q{printf '%s\r\n' '-a'; printf '\n'; printf '%s\r\n' 'a b'; printf '\r\n'} } };
   my ($rc, $argv, undef, $err) = pp_argv({ platforms => [@ALL], binaries => $bins }, 'mcp-x', '/o/out', $d);
@@ -248,7 +275,8 @@ sub pp_argv {
     'argv_crlf_empty: "\r\n" ends a line, empty and CR-only lines dropped, interior space kept');
 }
 
-{ # pp_args runs from dist_root with no argument (R6)
+SKIP: { # pp_args runs from dist_root with no argument (R6)
+  skip 'no sh on PATH: pp_args runs through sh', 3 unless $SH;
   my $d = tempdir(CLEANUP => 1);
   my $bins = { 'mcp-x' => { %{ $BIN{'mcp-x'} }, pp_args => q{pwd; printf '%s\n' "$#"} } };
   my ($rc, $argv, undef, $err) = pp_argv({ platforms => [@ALL], binaries => $bins }, 'mcp-x', '/o/out', $d);
@@ -458,7 +486,7 @@ sub run_script_env {
   return ($? >> 8, scalar(slurp($o)), scalar(slurp($e)));
 }
 
-my $PRINTF = do {
+my $PRINTF = $WIN_FAKES ? undef : do {
   my $builtin = `/bin/sh -c 'PATH=/nonexistent; printf x' 2>/dev/null`;
   $builtin eq 'x' ? undef : (grep { -x } map { File::Spec->catfile($_, 'printf') } grep { length } File::Spec->path)[0];
 };
@@ -495,7 +523,8 @@ sub startable {
   return fake_binary($path, qq{/bin/mkdir -p "\$PAR_GLOBAL_TEMP/c" || exit 9\nprintf "\\177ELF" > "\$PAR_GLOBAL_TEMP/c/$perl_lib"}, @members);
 }
 
-{ # controls: the fake-tool setup itself works, so the red tests below measure the gate
+SKIP: { # controls: the fake-tool setup itself works, so the red tests below measure the gate
+  skip $WIN_FAKES, 4 if $WIN_FAKES;
   my $d = tempdir(CLEANUP => 1);
   my $zip = startable("$d/a", 'libperl.so.5.40', 'shlib/libperl.so' => 'x');
   my $bin = fake_tools("$d/ok", ldd => $LDD_LIBC, objdump => objdump_versions(0, '2.17', '2.5'));
@@ -509,7 +538,8 @@ sub startable {
   like($out, qr/2\.29/, 'gate_control_over_floor: names 2.29');
 }
 
-{ # I1: a missing tool is a failure that names the tool
+SKIP: { # I1: a missing tool is a failure that names the tool
+  skip $WIN_FAKES, 13 if $WIN_FAKES;
   my $d = tempdir(CLEANUP => 1);
   my $zip = startable("$d/a", 'libperl.so.5.40', 'shlib/libperl.so' => 'x');
 
@@ -546,7 +576,8 @@ sub startable {
   unlike($out, qr/, ok\b/, 'tool_fails_objdump: never reports ok');
 }
 
-{ # I2: the glibc check must have run on linux
+SKIP: { # I2: the glibc check must have run on linux
+  skip $WIN_FAKES, 3 if $WIN_FAKES;
   my $d = tempdir(CLEANUP => 1);
   my $zip = startable("$d/a", 'libperl.so.5.40', 'shlib/libperl.so' => 'x');
   my $bin = fake_tools("$d/bin", ldd => $LDD_LIBC, objdump => 'exit 0');
@@ -556,7 +587,8 @@ sub startable {
   like($out, qr/glibc/i, 'glibc_check_did_not_run: output mentions glibc');
 }
 
-{ # M1: an archive with no objects proves nothing
+SKIP: { # M1: an archive with no objects proves nothing
+  skip $WIN_FAKES, 3 if $WIN_FAKES;
   my $d = tempdir(CLEANUP => 1);
   my $zip = make_zip("$d/none.zip", 'lib/Foo.pm' => "package Foo; 1;\n");
   my $lin = fake_tools("$d/lin", ldd => $LDD_LIBC, objdump => objdump_versions(0, '2.17'));
@@ -568,7 +600,8 @@ sub startable {
   isnt($rc, 0, 'zero_objects_macos: no objects -> non-zero exit');
 }
 
-{ # M2 (CLI): an absolute install name of a packed dylib counts as packed
+SKIP: { # M2 (CLI): an absolute install name of a packed dylib counts as packed
+  skip $WIN_FAKES, 3 if $WIN_FAKES;
   my $d = tempdir(CLEANUP => 1);
   my $otool = join "\n",
     'f=$2', 'echo "$f:"',
@@ -618,7 +651,8 @@ sub startable {
   like($v[0] // '', qr/libssl-3-x64\.dll.*a\.dll/, 'violations_windows_foreign: names lib and object');
 }
 
-{ # Windows (CLI): System32 resolved from SystemRoot, case-insensitively
+SKIP: { # Windows (CLI): System32 resolved from SystemRoot, case-insensitively
+  skip $WIN_FAKES, 3 if $WIN_FAKES;
   my $d = tempdir(CLEANUP => 1);
   spew("$d/win/System32/kernel32.dll", 'x');
   my $objdump = join "\n", 'f=$2',
@@ -724,7 +758,8 @@ sub start_gate_timeout {
 
 sub rec { my ($rec, $f) = @_; my $c = -e "$rec/$f" ? slurp("$rec/$f") : ''; $c =~ s/\n\z//; return $c }
 
-{ # the gate starts the binary: --help, stdin at EOF, PAR_GLOBAL_TEMP = fresh empty dir
+SKIP: { # the gate starts the binary: --help, stdin at EOF, PAR_GLOBAL_TEMP = fresh empty dir
+  skip $WIN_FAKES, 7 if $WIN_FAKES;
   my ($rc, $out, $rec) = start_gate();
   is($rc, 0, 'gate_start_control_ok: cache with libperl + system libs only -> exit 0') or diag $out;
   is(rec($rec, 'argv'), '--help', 'gate_start_invocation: the binary is started with --help and nothing else');
@@ -736,7 +771,8 @@ sub rec { my ($rec, $f) = @_; my $c = -e "$rec/$f" ? slurp("$rec/$f") : ''; $c =
   like($out, qr/libperl\.so\.5\.40/, 'gate_start_lists_cache_objects: output lists the extracted libperl');
 }
 
-{ # a foreign lib linked by an object the start extracted fails the gate
+SKIP: { # a foreign lib linked by an object the start extracted fails the gate
+  skip $WIN_FAKES, 4 if $WIN_FAKES;
   my ($rc, $out) = start_gate(x_ldd => 'libcrypt.so.1');
   is($rc, 1, 'gate_start_cache_foreign_lib_fails: libcrypt.so.1 linked by a cached object -> exit 1');
   like($out, qr/libcrypt\.so\.1/, 'gate_start_cache_foreign_lib_fails: names the foreign library');
@@ -744,13 +780,15 @@ sub rec { my ($rec, $f) = @_; my $c = -e "$rec/$f" ? slurp("$rec/$f") : ''; $c =
   unlike($out, qr/libperl\.so\.5\.40 \(linked/, 'gate_start_cache_foreign_lib_fails: the extracted libperl linked by the inner executable is not blamed');
 }
 
-{ # glibc floor applies to the cache objects too
+SKIP: { # glibc floor applies to the cache objects too
+  skip $WIN_FAKES, 2 if $WIN_FAKES;
   my ($rc, $out) = start_gate(par_glibc => '2.29');
   is($rc, 1, 'gate_start_cache_glibc_over_floor_fails: GLIBC_2.29 in a cached object -> exit 1');
   like($out, qr/2\.29/, 'gate_start_cache_glibc_over_floor_fails: names 2.29');
 }
 
-{ # no perl shared library in the cache: the gate proved nothing about libperl
+SKIP: { # no perl shared library in the cache: the gate proved nothing about libperl
+  skip $WIN_FAKES, 4 if $WIN_FAKES;
   my ($rc, $out) = start_gate(script => $RECORD . $DROP_CACHE_NO_PERL);
   isnt($rc, 0, 'gate_start_no_perl_library_fails: no libperl in the cache -> non-zero exit');
   unlike($out, qr/, ok\b/, 'gate_start_no_perl_library_fails: never reports ok');
@@ -758,13 +796,15 @@ sub rec { my ($rec, $f) = @_; my $c = -e "$rec/$f" ? slurp("$rec/$f") : ''; $c =
   like($out, qr/libperl/, 'gate_start_no_perl_library_fails: message names libperl');
 }
 
-{ # a start that extracts nothing at all fails the same way
+SKIP: { # a start that extracts nothing at all fails the same way
+  skip $WIN_FAKES, 2 if $WIN_FAKES;
   my ($rc, $out) = start_gate(script => 'true');
   isnt($rc, 0, 'gate_start_empty_cache_fails: binary extracts nothing -> non-zero exit');
   like($out, qr/PAR_GLOBAL_TEMP|libperl/, 'gate_start_empty_cache_fails: message names PAR_GLOBAL_TEMP / libperl');
 }
 
-{ # a binary that cannot be spawned is a failure, not a skip
+SKIP: { # a binary that cannot be spawned is a failure, not a skip
+  skip $WIN_FAKES, 4 if $WIN_FAKES;
   my ($rc, $out, undef, $bin) = start_gate(not_executable => 1);
   isnt($rc, 0, 'gate_start_spawn_fails: a binary that cannot be executed -> non-zero exit');
   unlike($out, qr/, ok\b/, 'gate_start_spawn_fails: never reports ok');
@@ -803,7 +843,8 @@ sub dead {   # polls up to 10s: a slow system (GNU/Hurd) reaps the orphaned chil
   return 0;
 }
 
-{ # timeout alone is not a failure; the process (group) is killed; the cache is still evaluated
+SKIP: { # timeout alone is not a failure; the process (group) is killed; the cache is still evaluated
+  skip $WIN_FAKES, 6 if $WIN_FAKES;
   my ($rc, $out, $rec, $secs) = start_gate_timeout(2, script => $HANG);
   is($rc, 0, 'gate_start_timeout_not_a_failure: a binary that never exits -> gate still evaluates the cache, exit 0') or diag $out;
   cmp_ok($secs, '<', 20, 'gate_start_timeout_not_a_failure: gate returned long before the binary would have');
@@ -817,14 +858,16 @@ sub dead {   # polls up to 10s: a slow system (GNU/Hurd) reaps the orphaned chil
   kill 'KILL', $_ for grep { $_ } $pid, $child;   # never leave a sleeper behind
 }
 
-{ # ... and after a timeout the cache check still fails a foreign lib
+SKIP: { # ... and after a timeout the cache check still fails a foreign lib
+  skip $WIN_FAKES, 2 if $WIN_FAKES;
   my ($rc, $out, $rec) = start_gate_timeout(2, script => $HANG, x_ldd => 'libcrypt.so.1');
   is($rc, 1, 'gate_start_timeout_still_checks_cache: timeout + foreign lib in the cache -> exit 1');
   like($out, qr/libcrypt\.so\.1/, 'gate_start_timeout_still_checks_cache: names the foreign library');
   for my $f (qw( pid child )) { my $p = rec($rec, $f); kill 'KILL', $p if $p }
 }
 
-{ # no perl library after a timeout is still a failure
+SKIP: { # no perl library after a timeout is still a failure
+  skip $WIN_FAKES, 2 if $WIN_FAKES;
   my ($rc, $out, $rec) = start_gate_timeout(2, script => $RECORD . $DROP_CACHE_NO_PERL . "/bin/sleep 25 &\necho \$! > \"\$REC/child\"\nwait\n");
   isnt($rc, 0, 'gate_start_timeout_no_perl_fails: timeout + no libperl in the cache -> non-zero exit');
   like($out, qr/libperl|PAR_GLOBAL_TEMP/, 'gate_start_timeout_no_perl_fails: names libperl / PAR_GLOBAL_TEMP');
@@ -833,7 +876,8 @@ sub dead {   # polls up to 10s: a slow system (GNU/Hurd) reaps the orphaned chil
 
 # --- run_tool: a signal is not exit 0 ----------------------------------------
 
-{
+SKIP: {
+  skip $WIN_POSIX, 3 if $WIN_POSIX;
   my ($out, $rc) = DzilBinary::LibGate::run_tool(0, '/bin/sh', '-c', 'exit 3');
   is($rc, 3, 'run_tool_exit_code: a plain exit 3 is still reported as 3');
 
@@ -904,13 +948,16 @@ sub dead {   # polls up to 10s: a slow system (GNU/Hurd) reaps the orphaned chil
   ($rc, $out, $err) = run_script_env({ PATH => $empty }, 'pp-args.pl', $meta, 'mcp-x', '/o/out', $d);
   isnt($rc, 0, 'pp_args_child_exec_fails: sh not runnable -> non-zero exit');
   is($out, '', 'pp_args_child_exec_fails: no argv printed');
-  is(scalar(() = $err =~ /cannot exec sh/g), 1, 'pp_args_child_exec_fails: the child message appears exactly once');
+  # MSWin32 starts sh by a list-form pipe open, without a child that could fail its exec
+  my $no_sh = $^O eq 'MSWin32' ? qr/cannot run sh/ : qr/cannot exec sh/;
+  is(scalar(() = $err =~ /$no_sh/g), 1, 'pp_args_child_exec_fails: the child message appears exactly once');
 }
 
 # --- run_tool on Win32: list-form pipe open, no fork -------------------------
 # Real Win32 cannot run here; `local $^O` sends run_tool down run_tool_win32 on Linux.
 
-{
+SKIP: {
+  skip $WIN_POSIX, 5 if $WIN_POSIX;
   my @seen;
   my @r = do {
     no warnings 'redefine';
@@ -935,7 +982,8 @@ sub dead {   # polls up to 10s: a slow system (GNU/Hurd) reaps the orphaned chil
   is($u[1], 0, 'run_tool_win32_dispatch: ... while the Unix path accepts merge_stderr');
 }
 
-{
+SKIP: {
+  skip $WIN_POSIX, 10 if $WIN_POSIX;
   local $^O = 'MSWin32';
 
   my @r = DzilBinary::LibGate::run_tool(0, 'echo', 'hello', 'world');
@@ -987,7 +1035,8 @@ sub dead {   # polls up to 10s: a slow system (GNU/Hurd) reaps the orphaned chil
 # --- pp-args.pl run_in on Win32: list-form pipe open of sh, no fork ------------
 # Same technique: `local $^O` sends run_in down run_in_win32 on Linux.
 
-{
+SKIP: {
+  skip $WIN_POSIX, 4 if $WIN_POSIX;
   my @seen;
   my $r = do {
     no warnings 'redefine';
@@ -1009,7 +1058,8 @@ sub dead {   # polls up to 10s: a slow system (GNU/Hurd) reaps the orphaned chil
   is($u, "unix\n", 'run_in_win32_dispatch: ... and it ran the command');
 }
 
-{
+SKIP: {
+  skip $WIN_POSIX, 22 if $WIN_POSIX;
   my $d = abs_path(tempdir(CLEANUP => 1));
   my $start = Cwd::getcwd();
   local $^O = 'MSWin32';
@@ -1218,7 +1268,8 @@ sub win_fixture {
   return fake_tools("$d/bin", objdump => $WIN_OBJDUMP);
 }
 
-{ # win-dlls.pl CLI
+SKIP: { # win-dlls.pl CLI
+  skip $WIN_FAKES, 15 if $WIN_FAKES;
   my $d = tempdir(CLEANUP => 1);
   my $bin = win_fixture($d);
   my %env = (PATH => $bin, SystemRoot => "$d/win");
@@ -1263,7 +1314,8 @@ sub win_fixture {
   like($err, qr/\bobjdump\b/, 'windlls_cli_no_objdump: STDERR names objdump');
 }
 
-{ # lib-gate.pl: the cache listing is printed to STDOUT before the perl-library die
+SKIP: { # lib-gate.pl: the cache listing is printed to STDOUT before the perl-library die
+  skip $WIN_FAKES, 3 if $WIN_FAKES;
   my $d = tempdir(CLEANUP => 1);
   my $bin = win_fixture($d);
   my $noperl = fake_binary("$d/noperl", ':', 'lib/auto/Clean/Clean.xs.dll' => 'x');

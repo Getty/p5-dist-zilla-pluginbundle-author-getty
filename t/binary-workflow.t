@@ -190,11 +190,13 @@ is_deeply([map { s/^\s+|\s+$//gr } split /\n/, $perm // ''], ['contents: read'],
 }
 
 # The "Resolve the bundle commit" step, run for real under bash.
-{
+SKIP: {
   my ($step) = $job{plan} =~ /(^      - name: Resolve the bundle commit\n.*?)(?=^      - name:|\z)/ms;
   ok(defined $step, 'found the Resolve the bundle commit step') or $step = '';
   my ($body) = $step =~ /^        run: \|\n((?:          .*\n|\n)+)/m;
   ok(defined $body && length $body, 'the step has a run: block') or $body = "exit 99\n";
+  my ($bash) = grep { -x $_ } map { File::Spec->catfile($_, 'bash') } grep { length } File::Spec->path;
+  skip 'no bash on PATH: the step runs under bash', 15 unless $bash;
   $body =~ s/^ {10}//mg;
   my $dir = File::Temp::tempdir(CLEANUP => 1);
   open my $o, '>', "$dir/resolve.sh" or die; print $o $body; close $o;
